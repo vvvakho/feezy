@@ -43,78 +43,74 @@ func BillWorkflow(ctx workflow.Context, bill Bill) error {
 	addLineItemChan := workflow.GetSignalChannel(ctx, "addLineItem")
 	removeLineItemChan := workflow.GetSignalChannel(ctx, "removeLineItem")
 	closeBillChan := workflow.GetSignalChannel(ctx, "closeBill")
+	billClosed := false
 
-	for {
-		selector := workflow.NewSelector(ctx)
+	selector := workflow.NewSelector(ctx)
 
-		// register a handler to process the addLineItem signal
-		selector.AddReceive(addLineItemChan, func(c workflow.ReceiveChannel, _ bool) {
-			var signal any
-			c.Receive(ctx, &signal)
+	// register a handler to process the addLineItem signal
+	selector.AddReceive(addLineItemChan, func(c workflow.ReceiveChannel, _ bool) {
+		var signal any
+		c.Receive(ctx, &signal)
 
-			var addSignal AddLineItemSignal
-			err := mapstructure.Decode(signal, &addSignal)
-			if err != nil {
-				logger.Error("Invalid signal type %v", err)
-				return
-			}
-
-			lineItem := addSignal.LineItem
-			bill.AddLineItem(lineItem)
-
-			// currently looking for an alternative to avoid bottlenecking worker
-			// err = workflow.ExecuteActivity(ctx, UpdateBillTotalInDB, state.ID, state.Total).Get(ctx, nil)
-			// if err != nil {
-			//   logger.Error("Failed to update bill total in DB", "Error", err)
-			// }
-		})
-
-		// register a handler to process the removeLineItem signal
-		selector.AddReceive(removeLineItemChan, func(c workflow.ReceiveChannel, _ bool) {
-			var signal any
-			c.Receive(ctx, &signal)
-
-			var removeSignal RemoveLineItemSignal
-			err := mapstructure.Decode(signal, &removeSignal)
-			if err != nil {
-				logger.Error("Invalid signal type: %v")
-				return
-			}
-
-			lineItem := removeSignal.LineItem
-			bill.RemoveLineItem(lineItem)
-
-			// currently looking for an alternative to avoid bottlenecking worker
-			// err = workflow.ExecuteActivity(ctx, UpdateBillTotalInDB, state.ID, state.Total).Get(ctx, nil)
-			// if err != nil {
-			//   logger.Error("Failed to update bill total in DB", "Error", err)
-			// }
-		})
-
-		selector.AddReceive(closeBillChan, func(c workflow.ReceiveChannel, _ bool) {
-			var signal any
-			c.Receive(ctx, &signal)
-
-			var closeSignal CloseBillSignal
-			err := mapstructure.Decode(signal, &closeSignal)
-			if err != nil {
-				logger.Error("Invalid signal type: %v")
-				return
-			}
-
-			bill.Status = Closed
-
-			//TODO: actions to finalize, perhaps in workflow.Go routine ?
-		})
-
-		selector.Select(ctx)
-
-		if bill.Status == Closed {
-			logger.Info("Bill closed, finishing workflow:", "BillID", bill.ID)
-			break
+		var addSignal AddLineItemSignal
+		err := mapstructure.Decode(signal, &addSignal)
+		if err != nil {
+			logger.Error("Invalid signal type %v", err)
+			return
 		}
 
+		lineItem := addSignal.LineItem
+		bill.AddLineItem(lineItem)
+
+		// currently looking for an alternative to avoid bottlenecking worker
+		// workflow.Go(ctx, func(ctx workflow.Context) {
+		// 	err := workflow.ExecuteActivity(ctx, "UpdateBillTotalInDB", bill.ID, bill.Total).Get(ctx, nil)
+		// 	if err != nil {
+		// 		logger.Error("Failed to update bill total in DB", "Error", err)
+		// 	}
+		// })
+	})
+
+	// register a handler to process the removeLineItem signal
+	selector.AddReceive(removeLineItemChan, func(c workflow.ReceiveChannel, _ bool) {
+		var signal any
+		c.Receive(ctx, &signal)
+
+		var removeSignal RemoveLineItemSignal
+		err := mapstructure.Decode(signal, &removeSignal)
+		if err != nil {
+			logger.Error("Invalid signal type: %v")
+			return
+		}
+
+		lineItem := removeSignal.LineItem
+		bill.RemoveLineItem(lineItem)
+
+		// currently looking for an alternative to avoid bottlenecking worker
+		// err = workflow.ExecuteActivity(ctx, UpdateBillTotalInDB, state.ID, state.Total).Get(ctx, nil)
+		// if err != nil {
+		//   logger.Error("Failed to update bill total in DB", "Error", err)
+		// }
+	})
+
+	selector.AddReceive(closeBillChan, func(c workflow.ReceiveChannel, _ bool) {
+		var signal any
+		c.Receive(ctx, &signal)
+
+		billClosed = true
+
+		return
+		//TODO: actions to finalize, perhaps in workflow.Go routine ?
+	})
+
+	for {
+		selector.Select(ctx)
+		if billClosed {
+			logger.Info("Bill closed, finishing workflow.", "BillID", bill.ID)
+			break
+		}
 	}
+
 	return nil
 }
 

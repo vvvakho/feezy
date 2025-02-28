@@ -110,3 +110,37 @@ func GetBill(ctx context.Context, id string) (*GetBillResponse, error) {
 
 	//TODO: logic if workflow no longer in Temporal
 }
+
+type CloseBillRequest struct {
+	ID string `json:"user_id"`
+}
+
+type CloseBillResponse struct {
+	Status string
+}
+
+//encore:api public method=POST path=/bills/:id
+func CloseBill(ctx context.Context, id string) (*CloseBillResponse, error) {
+	//TODO: check if bill active
+
+	// Query Temporal to check if workflow is active
+
+	// Initialize client for Temporal connection
+	c, err := client.Dial(client.Options{}) //TODO: add connection options
+	if err != nil {
+		return nil, fmt.Errorf("Error connecting to Temporal server: %v", err)
+	}
+	defer c.Close()
+
+	// closeSignal := bill.CloseBillSignal{
+	//   Route: "closeBillSignal",
+	// }
+
+	err = c.SignalWorkflow(ctx, id, "", "closeBill", nil)
+	if err != nil {
+		return nil, fmt.Errorf("Error signaling CloseBill task: %v", err)
+	}
+
+	//TODO: logic if workflow no longer in Temporal
+	return &CloseBillResponse{Status: "Success"}, nil
+}
