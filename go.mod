@@ -6,6 +6,7 @@ require (
 	encore.dev v1.46.1
 	github.com/google/uuid v1.6.0
 	github.com/mitchellh/mapstructure v1.5.0
+	go.temporal.io/api v1.44.1
 	go.temporal.io/sdk v1.33.0
 	golang.org/x/net v0.28.0
 )
@@ -27,7 +28,6 @@ require (
 	github.com/robfig/cron v1.2.0 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
 	github.com/stretchr/testify v1.10.0 // indirect
-	go.temporal.io/api v1.44.1 // indirect
 	go.uber.org/atomic v1.10.0 // indirect
 	golang.org/x/crypto v0.26.0 // indirect
 	golang.org/x/sync v0.8.0 // indirect

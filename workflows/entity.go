@@ -8,7 +8,7 @@ import (
 
 type Bill struct {
 	ID        uuid.UUID
-	Items     []LineItem
+	Items     []Item
 	Total     Money
 	Currency  string
 	Status    Status
@@ -17,21 +17,19 @@ type Bill struct {
 	UpdatedAt time.Time
 }
 
-type LineItem struct {
+type Item struct {
 	ID           uuid.UUID
 	Quantity     int64
 	Description  string
 	PricePerUnit Money
 }
 
-type AddLineItemSignal struct {
-	Route    string
-	LineItem LineItem
+type AddItemSignal struct {
+	LineItem Item
 }
 
-type RemoveLineItemSignal struct {
-	Route    string
-	LineItem LineItem
+type RemoveItemSignal struct {
+	LineItem Item
 }
 
 type CloseBillSignal struct {

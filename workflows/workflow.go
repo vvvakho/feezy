@@ -4,7 +4,6 @@ import (
 	"slices"
 	"time"
 
-	"github.com/mitchellh/mapstructure"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
@@ -49,11 +48,9 @@ func BillWorkflow(ctx workflow.Context, bill Bill) error {
 
 	// register a handler to process the addLineItem signal
 	selector.AddReceive(addLineItemChan, func(c workflow.ReceiveChannel, _ bool) {
-		var signal any
-		c.Receive(ctx, &signal)
+		var addSignal AddItemSignal
+		c.Receive(ctx, &addSignal)
 
-		var addSignal AddLineItemSignal
-		err := mapstructure.Decode(signal, &addSignal)
 		if err != nil {
 			logger.Error("Invalid signal type %v", err)
 			return
@@ -73,11 +70,9 @@ func BillWorkflow(ctx workflow.Context, bill Bill) error {
 
 	// register a handler to process the removeLineItem signal
 	selector.AddReceive(removeLineItemChan, func(c workflow.ReceiveChannel, _ bool) {
-		var signal any
-		c.Receive(ctx, &signal)
+		var removeSignal RemoveItemSignal
+		c.Receive(ctx, &removeSignal)
 
-		var removeSignal RemoveLineItemSignal
-		err := mapstructure.Decode(signal, &removeSignal)
 		if err != nil {
 			logger.Error("Invalid signal type: %v")
 			return
@@ -114,9 +109,9 @@ func BillWorkflow(ctx workflow.Context, bill Bill) error {
 	return nil
 }
 
-func (b *Bill) AddLineItem(item LineItem) {
+func (b *Bill) AddLineItem(item Item) {
 	for i := range b.Items {
-		if b.Items[i].ID != b.ID {
+		if b.Items[i].ID != item.ID {
 			continue
 		}
 
@@ -127,7 +122,7 @@ func (b *Bill) AddLineItem(item LineItem) {
 	b.Items = append(b.Items, item)
 }
 
-func (b *Bill) RemoveLineItem(item LineItem) {
+func (b *Bill) RemoveLineItem(item Item) {
 	for i := range b.Items {
 		if b.Items[i].ID != item.ID {
 			continue

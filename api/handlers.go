@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	bill "github.com/vvvakho/feezy/workflows"
 	billing "github.com/vvvakho/feezy/workflows"
+	"go.temporal.io/api/enums/v1"
 	"go.temporal.io/sdk/client"
 )
 
@@ -63,14 +64,14 @@ type GetBillRequest struct {
 }
 
 type GetBillResponse struct {
-	ID        string          `json:"id"`
-	Items     []bill.LineItem `json:"items"`
-	Total     bill.Money      `json:"total"`
-	Currency  string          `json:"currency"`
-	Status    bill.Status     `json:"status"`
-	UserID    string          `json:"userId"`
-	CreatedAt time.Time       `json:"createdAt"`
-	UpdatedAt time.Time       `json:"updatedAt"`
+	ID        string      `json:"id"`
+	Items     []bill.Item `json:"items"`
+	Total     bill.Money  `json:"total"`
+	Currency  string      `json:"currency"`
+	Status    bill.Status `json:"status"`
+	UserID    string      `json:"userId"`
+	CreatedAt time.Time   `json:"createdAt"`
+	UpdatedAt time.Time   `json:"updatedAt"`
 }
 
 //encore:api public method=GET path=/bills/:id
@@ -84,7 +85,6 @@ func GetBill(ctx context.Context, id string) (*GetBillResponse, error) {
 	}
 	defer c.Close()
 
-	// Query Temporal to check if workflow is active
 	var billState billing.Bill //TODO: syntax...
 
 	// Start signal synchronously
@@ -111,6 +111,100 @@ func GetBill(ctx context.Context, id string) (*GetBillResponse, error) {
 	//TODO: logic if workflow no longer in Temporal
 }
 
+type AddLineItemToBillRequest struct {
+	ID           string
+	Quantity     int64
+	Description  string
+	PricePerUnit billing.Money
+}
+
+type AddLineItemToBillResponse struct {
+	Message string
+}
+
+//encore:api public method=POST path=/bills/:id/items
+func AddLineItemToBill(ctx context.Context, id string, req AddLineItemToBillRequest) (*AddLineItemToBillResponse, error) {
+	// Initialize Temporal client
+	c, err := client.Dial(client.Options{})
+	if err != nil {
+		return nil, fmt.Errorf("Error connecting to Temporal server: %v", err) //TODO: refactor to custom error
+	}
+	defer c.Close()
+
+	// Check if bill exists and is active
+	ok, err := isWorkflowRunning(c, id)
+	if !ok {
+		return nil, fmt.Errorf("Bill not found or already closed: %v", err) //TODO: refactor to custom error
+	}
+
+	itemID, err := uuid.Parse(req.ID)
+	if err != nil {
+		return nil, fmt.Errorf("Invalid ID: %v", err)
+	}
+
+	item := billing.Item{
+		ID:           itemID,
+		Quantity:     req.Quantity,
+		Description:  req.Description,
+		PricePerUnit: req.PricePerUnit,
+	}
+
+	err = c.SignalWorkflow(ctx, id, "", "addLineItem", bill.AddItemSignal{LineItem: item})
+	if err != nil {
+		return nil, fmt.Errorf("Error signaling addLineItem task: %v", err)
+	}
+
+	return &AddLineItemToBillResponse{Message: "ok"}, nil
+}
+
+type RemoveLineItemToBillRequest struct {
+	ID           string
+	Quantity     int64
+	Description  string
+	PricePerUnit billing.Money
+}
+
+type RemoveLineItemToBillResponse struct {
+	Message string
+}
+
+//TODO: is PATCH appropriate ??
+
+//encore:api public method=PATCH path=/bills/:id/items
+func RemoveLineItemToBill(ctx context.Context, id string, req RemoveLineItemToBillRequest) (*RemoveLineItemToBillResponse, error) {
+	// Initialize Temporal client
+	c, err := client.Dial(client.Options{})
+	if err != nil {
+		return nil, fmt.Errorf("Error connecting to Temporal server: %v", err) //TODO: refactor to custom error
+	}
+	defer c.Close()
+
+	// Check if bill exists and is active
+	ok, err := isWorkflowRunning(c, id)
+	if !ok {
+		return nil, fmt.Errorf("Bill not found or already closed: %v", err) //TODO: refactor to custom error
+	}
+
+	itemID, err := uuid.Parse(req.ID)
+	if err != nil {
+		return nil, fmt.Errorf("Invalid ID: %v", err)
+	}
+
+	item := billing.Item{
+		ID:           itemID,
+		Quantity:     req.Quantity,
+		Description:  req.Description,
+		PricePerUnit: req.PricePerUnit,
+	}
+
+	err = c.SignalWorkflow(ctx, id, "", "removeLineItem", bill.AddItemSignal{LineItem: item})
+	if err != nil {
+		return nil, fmt.Errorf("Error signaling removeLineItem task: %v", err)
+	}
+
+	return &RemoveLineItemToBillResponse{Message: "ok"}, nil
+}
+
 type CloseBillRequest struct {
 	ID string `json:"user_id"`
 }
@@ -125,12 +219,18 @@ func CloseBill(ctx context.Context, id string) (*CloseBillResponse, error) {
 
 	// Query Temporal to check if workflow is active
 
-	// Initialize client for Temporal connection
+	// Connect to Temporal
 	c, err := client.Dial(client.Options{}) //TODO: add connection options
 	if err != nil {
 		return nil, fmt.Errorf("Error connecting to Temporal server: %v", err)
 	}
 	defer c.Close()
+
+	// Check if workflow is running
+	ok, err := isWorkflowRunning(c, id)
+	if !ok {
+		return nil, fmt.Errorf("Bill not found or already closed: %v", err)
+	}
 
 	// closeSignal := bill.CloseBillSignal{
 	//   Route: "closeBillSignal",
@@ -142,5 +242,14 @@ func CloseBill(ctx context.Context, id string) (*CloseBillResponse, error) {
 	}
 
 	//TODO: logic if workflow no longer in Temporal
-	return &CloseBillResponse{Status: "Success"}, nil
+
+	return &CloseBillResponse{Status: "Success"}, nil //TODO: appropriate response?
+}
+
+func isWorkflowRunning(c client.Client, workflowID string) (bool, error) {
+	response, err := c.DescribeWorkflowExecution(context.Background(), workflowID, "")
+	if err != nil {
+		return false, err
+	}
+	return response.WorkflowExecutionInfo.Status == enums.WORKFLOW_EXECUTION_STATUS_RUNNING, nil
 }
