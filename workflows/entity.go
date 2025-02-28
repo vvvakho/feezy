@@ -1,4 +1,4 @@
-package fees
+package billing
 
 import (
 	"time"
@@ -6,11 +6,13 @@ import (
 	"github.com/google/uuid"
 )
 
-type BillState struct {
+type Bill struct {
 	ID        uuid.UUID
 	Items     []LineItem
 	Total     Money
-	Status    BillStatus
+	Currency  string
+	Status    Status
+	UserID    string
 	CreatedAt time.Time
 	UpdatedAt time.Time
 }
@@ -32,12 +34,16 @@ type RemoveLineItemSignal struct {
 	LineItem LineItem
 }
 
+type CloseBillSignal struct {
+	Route string
+}
+
 type Money struct {
 	Amount   int64
 	Currency string
 }
 
-type BillStatus string
+type Status string
 
-var BillOpen BillStatus = "BillOpen"
-var BillClosed BillStatus = "BillClosed"
+var Open Status = "BillOpen"
+var Closed Status = "BillClosed"
