@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	bill "github.com/vvvakho/feezy/workflows"
 	billing "github.com/vvvakho/feezy/workflows"
 	"go.temporal.io/api/enums/v1"
 	"go.temporal.io/sdk/client"
@@ -46,12 +45,12 @@ func CreateBill(ctx context.Context, req *CreateBillRequest) (*CreateBillRespons
 		return nil, fmt.Errorf("Unable to initialize bill ID: %v", err)
 	}
 
-	bill := bill.Bill{
+	bill := billing.Bill{
 		ID:     billID,
 		UserID: req.UserID,
 		Items:  []billing.Item{},
 		Total:  billing.Money{Amount: 0, Currency: req.Currency},
-		Status: billing.Open,
+		Status: billing.BillOpen,
 	}
 
 	// Start workflow asynchronously
@@ -72,13 +71,13 @@ type GetBillRequest struct {
 }
 
 type GetBillResponse struct {
-	ID        string      `json:"id"`
-	Items     []bill.Item `json:"items"`
-	Total     bill.Money  `json:"total"`
-	Status    bill.Status `json:"status"`
-	UserID    string      `json:"userId"`
-	CreatedAt time.Time   `json:"createdAt"`
-	UpdatedAt time.Time   `json:"updatedAt"`
+	ID        string         `json:"id"`
+	Items     []billing.Item `json:"items"`
+	Total     billing.Money  `json:"total"`
+	Status    billing.Status `json:"status"`
+	UserID    string         `json:"userId"`
+	CreatedAt time.Time      `json:"createdAt"`
+	UpdatedAt time.Time      `json:"updatedAt"`
 }
 
 //encore:api public method=GET path=/bills/:id
@@ -165,7 +164,7 @@ func AddLineItemToBill(ctx context.Context, id string, req AddLineItemToBillRequ
 		PricePerUnit: req.PricePerUnit,
 	}
 
-	err = c.SignalWorkflow(ctx, id, "", "addLineItem", bill.AddItemSignal{LineItem: billItem})
+	err = c.SignalWorkflow(ctx, id, "", "addLineItem", billing.AddItemSignal{LineItem: billItem})
 	if err != nil {
 		return nil, fmt.Errorf("Error signaling addLineItem task: %v", err)
 	}
@@ -215,7 +214,7 @@ func RemoveLineItemToBill(ctx context.Context, id string, req RemoveLineItemFrom
 		PricePerUnit: req.PricePerUnit,
 	}
 
-	err = c.SignalWorkflow(ctx, id, "", "removeLineItem", bill.AddItemSignal{LineItem: billItem})
+	err = c.SignalWorkflow(ctx, id, "", "removeLineItem", billing.AddItemSignal{LineItem: billItem})
 	if err != nil {
 		return nil, fmt.Errorf("Error signaling removeLineItem task: %v", err)
 	}
@@ -250,7 +249,7 @@ func CloseBill(ctx context.Context, id string) (*CloseBillResponse, error) {
 		return nil, fmt.Errorf("Bill not found or already closed: %v", err)
 	}
 
-	// closeSignal := bill.CloseBillSignal{
+	// closeSignal := billing.CloseBillSignal{
 	//   Route: "closeBillSignal",
 	// }
 
