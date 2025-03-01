@@ -26,6 +26,12 @@ type CreateBillResponse struct {
 // encore: api public method=POST path=/bills
 func CreateBill(ctx context.Context, req *CreateBillRequest) (*CreateBillResponse, error) {
 	//TODO: basic input validation before initializing client
+	// check if user exists
+
+	_, err := billing.IsValidCurrency(req.Currency)
+	if err != nil {
+		return nil, err
+	}
 
 	// Initialize client for Temporal connection
 	c, err := client.Dial(client.Options{}) //TODO: add connection options
@@ -41,9 +47,11 @@ func CreateBill(ctx context.Context, req *CreateBillRequest) (*CreateBillRespons
 	}
 
 	bill := bill.Bill{
-		ID:       billID,
-		Currency: req.Currency,
-		UserID:   req.UserID,
+		ID:     billID,
+		UserID: req.UserID,
+		Items:  []billing.Item{},
+		Total:  billing.Money{Amount: 0, Currency: req.Currency},
+		Status: billing.Open,
 	}
 
 	// Start workflow asynchronously
@@ -67,7 +75,6 @@ type GetBillResponse struct {
 	ID        string      `json:"id"`
 	Items     []bill.Item `json:"items"`
 	Total     bill.Money  `json:"total"`
-	Currency  string      `json:"currency"`
 	Status    bill.Status `json:"status"`
 	UserID    string      `json:"userId"`
 	CreatedAt time.Time   `json:"createdAt"`
@@ -77,8 +84,12 @@ type GetBillResponse struct {
 //encore:api public method=GET path=/bills/:id
 func GetBill(ctx context.Context, id string) (*GetBillResponse, error) {
 	//TODO: check if bill active
+	// do we first check db for closed bill or do we first try temporal?
+	// we'll be removing records from temporal after they complete
+	// so maybe check temporal, then its status, and if not present then check db
 
 	// Initialize client for Temporal connection
+	//TODO: perhaps we could have methods on a server struct so that initialization happens once?
 	c, err := client.Dial(client.Options{}) //TODO: add connection options
 	if err != nil {
 		return nil, fmt.Errorf("Error connecting to Temporal server: %v", err)
@@ -101,7 +112,6 @@ func GetBill(ctx context.Context, id string) (*GetBillResponse, error) {
 		ID:        billState.ID.String(),
 		Items:     billState.Items,
 		Total:     billState.Total,
-		Currency:  billState.Currency,
 		Status:    billState.Status,
 		UserID:    billState.UserID,
 		CreatedAt: billState.CreatedAt,
@@ -124,6 +134,12 @@ type AddLineItemToBillResponse struct {
 
 //encore:api public method=POST path=/bills/:id/items
 func AddLineItemToBill(ctx context.Context, id string, req AddLineItemToBillRequest) (*AddLineItemToBillResponse, error) {
+	// Validate input
+	_, err := billing.IsValidCurrency(req.PricePerUnit.Currency)
+	if err != nil {
+		return &AddLineItemToBillResponse{}, err
+	}
+
 	// Initialize Temporal client
 	c, err := client.Dial(client.Options{})
 	if err != nil {
@@ -142,14 +158,14 @@ func AddLineItemToBill(ctx context.Context, id string, req AddLineItemToBillRequ
 		return nil, fmt.Errorf("Invalid ID: %v", err)
 	}
 
-	item := billing.Item{
+	billItem := billing.Item{
 		ID:           itemID,
 		Quantity:     req.Quantity,
 		Description:  req.Description,
 		PricePerUnit: req.PricePerUnit,
 	}
 
-	err = c.SignalWorkflow(ctx, id, "", "addLineItem", bill.AddItemSignal{LineItem: item})
+	err = c.SignalWorkflow(ctx, id, "", "addLineItem", bill.AddItemSignal{LineItem: billItem})
 	if err != nil {
 		return nil, fmt.Errorf("Error signaling addLineItem task: %v", err)
 	}
@@ -157,21 +173,23 @@ func AddLineItemToBill(ctx context.Context, id string, req AddLineItemToBillRequ
 	return &AddLineItemToBillResponse{Message: "ok"}, nil
 }
 
-type RemoveLineItemToBillRequest struct {
+//TODO: BatchAddLineItems
+
+type RemoveLineItemFromBillRequest struct {
 	ID           string
 	Quantity     int64
 	Description  string
 	PricePerUnit billing.Money
 }
 
-type RemoveLineItemToBillResponse struct {
+type RemoveLineItemFromBillResponse struct {
 	Message string
 }
 
 //TODO: is PATCH appropriate ??
 
 //encore:api public method=PATCH path=/bills/:id/items
-func RemoveLineItemToBill(ctx context.Context, id string, req RemoveLineItemToBillRequest) (*RemoveLineItemToBillResponse, error) {
+func RemoveLineItemToBill(ctx context.Context, id string, req RemoveLineItemFromBillRequest) (*RemoveLineItemFromBillResponse, error) {
 	// Initialize Temporal client
 	c, err := client.Dial(client.Options{})
 	if err != nil {
@@ -190,19 +208,19 @@ func RemoveLineItemToBill(ctx context.Context, id string, req RemoveLineItemToBi
 		return nil, fmt.Errorf("Invalid ID: %v", err)
 	}
 
-	item := billing.Item{
+	billItem := billing.Item{
 		ID:           itemID,
 		Quantity:     req.Quantity,
 		Description:  req.Description,
 		PricePerUnit: req.PricePerUnit,
 	}
 
-	err = c.SignalWorkflow(ctx, id, "", "removeLineItem", bill.AddItemSignal{LineItem: item})
+	err = c.SignalWorkflow(ctx, id, "", "removeLineItem", bill.AddItemSignal{LineItem: billItem})
 	if err != nil {
 		return nil, fmt.Errorf("Error signaling removeLineItem task: %v", err)
 	}
 
-	return &RemoveLineItemToBillResponse{Message: "ok"}, nil
+	return &RemoveLineItemFromBillResponse{Message: "ok"}, nil
 }
 
 type CloseBillRequest struct {

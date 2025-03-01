@@ -1,9 +1,11 @@
 package billing
 
 import (
+	"errors"
 	"slices"
 	"time"
 
+	"github.com/mitchellh/mapstructure"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
@@ -51,13 +53,16 @@ func BillWorkflow(ctx workflow.Context, bill Bill) error {
 		var addSignal AddItemSignal
 		c.Receive(ctx, &addSignal)
 
-		if err != nil {
-			logger.Error("Invalid signal type %v", err)
+		lineItem := addSignal.LineItem
+		if err := bill.AddLineItem(lineItem); err != nil {
+			logger.Error("Error adding item to bill", "Error", err)
 			return
 		}
 
-		lineItem := addSignal.LineItem
-		bill.AddLineItem(lineItem)
+		if err := bill.CalculateTotal(); err != nil {
+			logger.Error("Error calculating bill total", "Error", err)
+			return
+		}
 
 		// currently looking for an alternative to avoid bottlenecking worker
 		// workflow.Go(ctx, func(ctx workflow.Context) {
@@ -73,13 +78,16 @@ func BillWorkflow(ctx workflow.Context, bill Bill) error {
 		var removeSignal RemoveItemSignal
 		c.Receive(ctx, &removeSignal)
 
-		if err != nil {
-			logger.Error("Invalid signal type: %v")
+		lineItem := removeSignal.LineItem
+		if err := bill.RemoveLineItem(lineItem); err != nil {
+			logger.Error("Error removing item from bill", "Error", err)
 			return
 		}
 
-		lineItem := removeSignal.LineItem
-		bill.RemoveLineItem(lineItem)
+		if err := bill.CalculateTotal(); err != nil {
+			logger.Error("Error calculating bill total", "Error", err)
+			return
+		}
 
 		// currently looking for an alternative to avoid bottlenecking worker
 		// err = workflow.ExecuteActivity(ctx, UpdateBillTotalInDB, state.ID, state.Total).Get(ctx, nil)
@@ -89,9 +97,21 @@ func BillWorkflow(ctx workflow.Context, bill Bill) error {
 	})
 
 	selector.AddReceive(closeBillChan, func(c workflow.ReceiveChannel, _ bool) {
-		var signal any
-		c.Receive(ctx, &signal)
+		var closeSignal CloseBillSignal
+		c.Receive(ctx, &closeSignal)
 
+		err := mapstructure.Decode(closeSignal, &closeSignal)
+		if err != nil {
+			logger.Error("Invalid signal type", "Error", err)
+			return
+		}
+
+		if err := bill.CalculateTotal(); err != nil {
+			logger.Error("Error calculating bill total", "Error", err)
+			return
+		}
+
+		bill.Status = Closed
 		billClosed = true
 
 		return
@@ -109,29 +129,49 @@ func BillWorkflow(ctx workflow.Context, bill Bill) error {
 	return nil
 }
 
-func (b *Bill) AddLineItem(item Item) {
-	for i := range b.Items {
-		if b.Items[i].ID != item.ID {
-			continue
+func (b *Bill) AddLineItem(itemToAdd Item) error {
+	for i, itemInBill := range b.Items {
+		if itemInBill.ID == itemToAdd.ID {
+			if itemInBill.PricePerUnit != itemToAdd.PricePerUnit {
+				return errors.New("Price of item has changed, please use new UUID")
+			}
+			b.Items[i].Quantity += itemToAdd.Quantity
+			return nil
 		}
-
-		b.Items[i].Quantity += item.Quantity
-		return
 	}
+	b.Items = append(b.Items, itemToAdd)
 
-	b.Items = append(b.Items, item)
+	return nil
 }
 
-func (b *Bill) RemoveLineItem(item Item) {
-	for i := range b.Items {
-		if b.Items[i].ID != item.ID {
-			continue
+func (b *Bill) RemoveLineItem(itemToRemove Item) error {
+	for i, itemInBill := range b.Items {
+		if itemInBill.ID == itemToRemove.ID {
+			b.Items[i].Quantity -= itemToRemove.Quantity
+			if b.Items[i].Quantity <= 0 {
+				b.Items = slices.Delete(b.Items, i, i+1)
+			}
+		}
+	}
+
+	return nil
+}
+
+func (b *Bill) CalculateTotal() error {
+	var total minorUnit
+	for _, v := range b.Items {
+		amount := v.PricePerUnit.Amount         // 275 gel
+		fromCurrency := v.PricePerUnit.Currency // gel
+		toCurrency := b.Total.Currency          // usd
+
+		unitPrice, err := convert(toCurrency, fromCurrency, amount) // 100
+		if err != nil {
+			return err
 		}
 
-		b.Items[i].Quantity -= item.Quantity
-		if b.Items[i].Quantity <= 0 {
-			b.Items = slices.Delete(b.Items, i, i+1)
-		}
-		break
+		total += unitPrice * minorUnit(v.Quantity) // 100 * 1
 	}
+	b.Total.Amount = total
+
+	return nil
 }
