@@ -13,7 +13,7 @@ func BillWorkflow(ctx workflow.Context, bill domain.Bill) error {
 	}
 
 	// Asynchronously add bill to DB
-	addBillToDB(ctx, &bill, logger)
+	// addBillToDB(ctx, &bill, logger)
 
 	// Set up handlers for signals
 	addLineItemChan := workflow.GetSignalChannel(ctx, "addLineItem")

@@ -1,25 +1,17 @@
-package api
+package service
 
 import (
 	"context"
 	"fmt"
 
-	"encore.dev/storage/sqldb"
 	"github.com/google/uuid"
 	"github.com/vvvakho/feezy/domain"
 	"github.com/vvvakho/feezy/workflow"
-	"go.temporal.io/api/enums/v1"
 	"go.temporal.io/sdk/client"
 )
 
-//TODO: add logger
-
-type Server struct {
-	DB *sqldb.Database
-}
-
 // encore: api public method=POST path=/bills
-func (s *Server) CreateBill(ctx context.Context, req *CreateBillRequest) (*CreateBillResponse, error) {
+func (s *Service) CreateBill(ctx context.Context, req *CreateBillRequest) (*CreateBillResponse, error) {
 	//TODO: basic input validation before initializing client
 	// check if user exists
 
@@ -63,7 +55,7 @@ func (s *Server) CreateBill(ctx context.Context, req *CreateBillRequest) (*Creat
 }
 
 //encore:api public method=GET path=/bills/:id
-func (s *Server) GetBill(ctx context.Context, id string) (*GetBillResponse, error) {
+func (s *Service) GetBill(ctx context.Context, id string) (*GetBillResponse, error) {
 	//TODO: check if bill active
 	// do we first check db for closed bill or do we first try temporal?
 	// we'll be removing records from temporal after they complete
@@ -103,8 +95,11 @@ func (s *Server) GetBill(ctx context.Context, id string) (*GetBillResponse, erro
 }
 
 //encore:api public method=POST path=/bills/:id/items
-func (s *Server) AddLineItemToBill(ctx context.Context, id string, req AddLineItemToBillRequest) (*AddLineItemToBillResponse, error) {
+func (s *Service) AddLineItemToBill(ctx context.Context, id string, req AddLineItemToBillRequest) (*AddLineItemToBillResponse, error) {
 	// Validate input
+	if req.Quantity < 1 {
+		return &AddLineItemToBillResponse{}, fmt.Errorf("Invalid item quantity: %v", req.Quantity)
+	}
 	_, err := domain.IsValidCurrency(req.PricePerUnit.Currency)
 	if err != nil {
 		return &AddLineItemToBillResponse{}, err
@@ -148,7 +143,7 @@ func (s *Server) AddLineItemToBill(ctx context.Context, id string, req AddLineIt
 //TODO: is PATCH appropriate ??
 
 //encore:api public method=PATCH path=/bills/:id/items
-func (s *Server) RemoveLineItemToBill(ctx context.Context, id string, req RemoveLineItemFromBillRequest) (*RemoveLineItemFromBillResponse, error) {
+func (s *Service) RemoveLineItemToBill(ctx context.Context, id string, req RemoveLineItemFromBillRequest) (*RemoveLineItemFromBillResponse, error) {
 	// Initialize Temporal client
 	c, err := client.Dial(client.Options{})
 	if err != nil {
@@ -183,7 +178,7 @@ func (s *Server) RemoveLineItemToBill(ctx context.Context, id string, req Remove
 }
 
 //encore:api public method=POST path=/bills/:id
-func (s *Server) CloseBill(ctx context.Context, id string) (*CloseBillResponse, error) {
+func (s *Service) CloseBill(ctx context.Context, id string) (*CloseBillResponse, error) {
 	//TODO: check if bill active
 
 	// Query Temporal to check if workflow is active
@@ -213,12 +208,4 @@ func (s *Server) CloseBill(ctx context.Context, id string) (*CloseBillResponse, 
 	//TODO: logic if workflow no longer in Temporal
 
 	return &CloseBillResponse{Status: "Success"}, nil //TODO: appropriate response?
-}
-
-func isWorkflowRunning(c client.Client, workflowID string) (bool, error) {
-	response, err := c.DescribeWorkflowExecution(context.Background(), workflowID, "")
-	if err != nil {
-		return false, err
-	}
-	return response.WorkflowExecutionInfo.Status == enums.WORKFLOW_EXECUTION_STATUS_RUNNING, nil
 }

@@ -99,7 +99,7 @@ func handleAddLineItemSignal(ctx workflow.Context, c workflow.ReceiveChannel, bi
 	}
 
 	// Update bill total in DB asynchronously
-	addBillToDB(ctx, bill, logger)
+	// addBillToDB(ctx, bill, logger)
 
 	return nil
 }
@@ -118,7 +118,7 @@ func handleRemoveLineItemSignal(ctx workflow.Context, c workflow.ReceiveChannel,
 	}
 
 	// Update bill total in DB asynchronously
-	addBillToDB(ctx, bill, logger)
+	// addBillToDB(ctx, bill, logger)
 	return nil
 }
 

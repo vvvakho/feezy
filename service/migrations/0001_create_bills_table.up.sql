@@ -1,5 +1,5 @@
 -- Create Closed Bills Table
-CREATE TABLE ClosedBills (
+CREATE TABLE closed_bills (
     ID          UUID PRIMARY KEY,
     UserID      UUID NOT NULL,
     Status      VARCHAR(50) NOT NULL,
@@ -11,7 +11,7 @@ CREATE TABLE ClosedBills (
 );
 
 -- Create Closed Bill Items Table
-CREATE TABLE ClosedBillItems (
+CREATE TABLE closed_bills_items (
     ID          UUID PRIMARY KEY,
     BillID      UUID NOT NULL REFERENCES ClosedBills(ID) ON DELETE CASCADE,
     Description TEXT NOT NULL,
