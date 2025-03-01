@@ -3,8 +3,8 @@ package api
 import (
 	"context"
 	"fmt"
-	"time"
 
+	"encore.dev/storage/sqldb"
 	"github.com/google/uuid"
 	"github.com/vvvakho/feezy/domain"
 	"github.com/vvvakho/feezy/workflow"
@@ -14,17 +14,12 @@ import (
 
 //TODO: add logger
 
-type CreateBillRequest struct {
-	UserID   string `json:"user_id"`
-	Currency string `json:"currency"`
-}
-
-type CreateBillResponse struct {
-	ID string `json:"id"`
+type Server struct {
+	DB *sqldb.Database
 }
 
 // encore: api public method=POST path=/bills
-func CreateBill(ctx context.Context, req *CreateBillRequest) (*CreateBillResponse, error) {
+func (s *Server) CreateBill(ctx context.Context, req *CreateBillRequest) (*CreateBillResponse, error) {
 	//TODO: basic input validation before initializing client
 	// check if user exists
 
@@ -67,22 +62,8 @@ func CreateBill(ctx context.Context, req *CreateBillRequest) (*CreateBillRespons
 	return &CreateBillResponse{ID: billID.String()}, nil
 }
 
-type GetBillRequest struct {
-	ID string `json:"user_id"`
-}
-
-type GetBillResponse struct {
-	ID        string        `json:"id"`
-	Items     []domain.Item `json:"items"`
-	Total     domain.Money  `json:"total"`
-	Status    domain.Status `json:"status"`
-	UserID    string        `json:"userId"`
-	CreatedAt time.Time     `json:"createdAt"`
-	UpdatedAt time.Time     `json:"updatedAt"`
-}
-
 //encore:api public method=GET path=/bills/:id
-func GetBill(ctx context.Context, id string) (*GetBillResponse, error) {
+func (s *Server) GetBill(ctx context.Context, id string) (*GetBillResponse, error) {
 	//TODO: check if bill active
 	// do we first check db for closed bill or do we first try temporal?
 	// we'll be removing records from temporal after they complete
@@ -121,19 +102,8 @@ func GetBill(ctx context.Context, id string) (*GetBillResponse, error) {
 	//TODO: logic if workflow no longer in Temporal
 }
 
-type AddLineItemToBillRequest struct {
-	ID           string
-	Quantity     int64
-	Description  string
-	PricePerUnit domain.Money
-}
-
-type AddLineItemToBillResponse struct {
-	Message string
-}
-
 //encore:api public method=POST path=/bills/:id/items
-func AddLineItemToBill(ctx context.Context, id string, req AddLineItemToBillRequest) (*AddLineItemToBillResponse, error) {
+func (s *Server) AddLineItemToBill(ctx context.Context, id string, req AddLineItemToBillRequest) (*AddLineItemToBillResponse, error) {
 	// Validate input
 	_, err := domain.IsValidCurrency(req.PricePerUnit.Currency)
 	if err != nil {
@@ -175,21 +145,10 @@ func AddLineItemToBill(ctx context.Context, id string, req AddLineItemToBillRequ
 
 //TODO: BatchAddLineItems
 
-type RemoveLineItemFromBillRequest struct {
-	ID           string
-	Quantity     int64
-	Description  string
-	PricePerUnit domain.Money
-}
-
-type RemoveLineItemFromBillResponse struct {
-	Message string
-}
-
 //TODO: is PATCH appropriate ??
 
 //encore:api public method=PATCH path=/bills/:id/items
-func RemoveLineItemToBill(ctx context.Context, id string, req RemoveLineItemFromBillRequest) (*RemoveLineItemFromBillResponse, error) {
+func (s *Server) RemoveLineItemToBill(ctx context.Context, id string, req RemoveLineItemFromBillRequest) (*RemoveLineItemFromBillResponse, error) {
 	// Initialize Temporal client
 	c, err := client.Dial(client.Options{})
 	if err != nil {
@@ -223,16 +182,8 @@ func RemoveLineItemToBill(ctx context.Context, id string, req RemoveLineItemFrom
 	return &RemoveLineItemFromBillResponse{Message: "ok"}, nil
 }
 
-type CloseBillRequest struct {
-	ID string `json:"user_id"`
-}
-
-type CloseBillResponse struct {
-	Status string
-}
-
 //encore:api public method=POST path=/bills/:id
-func CloseBill(ctx context.Context, id string) (*CloseBillResponse, error) {
+func (s *Server) CloseBill(ctx context.Context, id string) (*CloseBillResponse, error) {
 	//TODO: check if bill active
 
 	// Query Temporal to check if workflow is active

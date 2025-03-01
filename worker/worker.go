@@ -1,39 +1,50 @@
-package main
+package worker
 
 import (
-	"log"
+	"context"
+	"fmt"
 
+	"github.com/vvvakho/feezy/activity"
 	"github.com/vvvakho/feezy/workflow"
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/worker"
 )
 
-func main() {
+//encore:service
+type Service struct {
+	temporalClient client.Client
+	worker         worker.Worker
+}
+
+// Initialize the Temporal worker inside Encore
+func initService() (*Service, error) {
 	// Connect to Temporal
-	c, err := client.Dial(client.Options{}) //TODO: save the client options in config
+	c, err := client.Dial(client.Options{})
 	if err != nil {
-		log.Fatalf("Unable to connect to Temporal server: %v", err)
+		return nil, err
 	}
-	defer c.Close()
-
-	// Initialize DB connection
-	//TODO: DB using Encore
-
-	// Instantiate Activities struct
-	activities := &workflow.Activities{}
 
 	// Create a worker pool for delegating tasks
+	w := worker.New(c, "create-bill-queue", worker.Options{})
 
-	// Create a new worker listening on the create-bill-queue
-	w := worker.New(c, "create-bill-queue", worker.Options{}) //TODO: save the queue names in separate file
+	// Instantiate Activities struct
+	activities := &activity.Activities{}
 
 	// Register Workflow and Activities
 	w.RegisterWorkflow(workflow.BillWorkflow)
 	w.RegisterActivity(activities)
 
-	// Start worker
-	err = w.Run(worker.InterruptCh())
+	// Start worker asynchronously (so Encore doesn't block)
+	err = w.Start()
 	if err != nil {
-		log.Fatalf("Unable to start Worker: %v", err)
+		c.Close()
+		return nil, fmt.Errorf("start temporal worker: %v", err)
 	}
+
+	return &Service{temporalClient: c, worker: w}, nil
+}
+
+func (s *Service) Shutdown(force context.Context) {
+	s.temporalClient.Close()
+	s.worker.Stop()
 }

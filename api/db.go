@@ -2,22 +2,24 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"encore.dev/storage/sqldb"
 	"github.com/vvvakho/feezy/domain"
 )
 
-var BillsDB = sqldb.NewDatabase("bills", sqldb.DatabaseConfig{
-	Migrations: "./migrations",
-})
+// var BillsDB = sqldb.NewDatabase("bills", sqldb.DatabaseConfig{
+// 	Migrations: "./migrations",
+// })
 
-// Define struct that implements BillStorage interface
-type PostgresBillStorage struct {
-	DB *sqldb.Database
+func InitDB() *sqldb.Database {
+	return sqldb.NewDatabase("bills", sqldb.DatabaseConfig{
+		Migrations: "./migrations",
+	})
 }
 
-func (s *PostgresBillStorage) AddToDB(ctx context.Context, bill domain.Bill) error {
+func (s *Server) AddToDB(ctx context.Context, bill domain.Bill) error {
 	_, err := s.DB.Exec(ctx, `
 		INSERT INTO closed_bills (
 			ID, UserID, Status, TotalAmount, Currency, CreatedAt, UpdatedAt, ClosedAt)
@@ -34,5 +36,8 @@ func (s *PostgresBillStorage) AddToDB(ctx context.Context, bill domain.Bill) err
 		bill.UpdatedAt,
 		time.Now(),
 	)
-	return err
+	if err != nil {
+		return fmt.Errorf("Error inserting into db: %v", err)
+	}
+	return nil
 }
