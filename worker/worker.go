@@ -3,7 +3,6 @@ package main
 import (
 	"log"
 
-	db "github.com/vvvakho/feezy/db/postgres"
 	"github.com/vvvakho/feezy/workflow"
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/worker"
@@ -21,7 +20,7 @@ func main() {
 	//TODO: DB using Encore
 
 	// Instantiate Activities struct
-	activities := &workflow.Activities{DB: &db.PostgresBillStorage{}}
+	activities := &workflow.Activities{}
 
 	// Create a worker pool for delegating tasks
 

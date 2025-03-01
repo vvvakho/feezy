@@ -1,4 +1,4 @@
-package db
+package api
 
 import (
 	"context"
@@ -8,16 +8,17 @@ import (
 	"github.com/vvvakho/feezy/domain"
 )
 
-// Define the database instance
 var BillsDB = sqldb.NewDatabase("bills", sqldb.DatabaseConfig{
 	Migrations: "./migrations",
 })
 
 // Define struct that implements BillStorage interface
-type PostgresBillStorage struct{}
+type PostgresBillStorage struct {
+	DB *sqldb.Database
+}
 
 func (s *PostgresBillStorage) AddToDB(ctx context.Context, bill domain.Bill) error {
-	_, err := BillsDB.Exec(ctx, `
+	_, err := s.DB.Exec(ctx, `
 		INSERT INTO closed_bills (
 			ID, UserID, Status, TotalAmount, Currency, CreatedAt, UpdatedAt, ClosedAt)
 		VALUES (
