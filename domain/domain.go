@@ -1,4 +1,4 @@
-package billing
+package domain
 
 import (
 	"errors"
@@ -7,8 +7,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"go.temporal.io/sdk/log"
-	"go.temporal.io/sdk/workflow"
 )
 
 type Bill struct {
@@ -26,18 +24,6 @@ type Item struct {
 	Quantity     int64
 	Description  string
 	PricePerUnit Money
-}
-
-type AddItemSignal struct {
-	LineItem Item
-}
-
-type RemoveItemSignal struct {
-	LineItem Item
-}
-
-type CloseBillSignal struct {
-	Route string
 }
 
 type minorUnit int64
@@ -88,7 +74,7 @@ func convert(toCurrency string, fromCurrency string, amount minorUnit) (minorUni
 	return convertedAmount, nil
 }
 
-func (b *Bill) addLineItem(itemToAdd Item) error {
+func (b *Bill) AddLineItem(itemToAdd Item) error {
 	for i, itemInBill := range b.Items {
 		if itemInBill.ID == itemToAdd.ID {
 			if itemInBill.PricePerUnit != itemToAdd.PricePerUnit {
@@ -104,7 +90,7 @@ func (b *Bill) addLineItem(itemToAdd Item) error {
 	return nil
 }
 
-func (b *Bill) removeLineItem(itemToRemove Item) error {
+func (b *Bill) RemoveLineItem(itemToRemove Item) error {
 	for i, itemInBill := range b.Items {
 		if itemInBill.ID == itemToRemove.ID {
 			if itemInBill.PricePerUnit != itemToRemove.PricePerUnit {
@@ -121,7 +107,7 @@ func (b *Bill) removeLineItem(itemToRemove Item) error {
 	return nil
 }
 
-func (b *Bill) calculateTotal() error {
+func (b *Bill) CalculateTotal() error {
 	var total minorUnit
 	for _, v := range b.Items {
 		amount := v.PricePerUnit.Amount         // 275 gel
@@ -138,13 +124,4 @@ func (b *Bill) calculateTotal() error {
 	b.Total.Amount = total
 
 	return nil
-}
-
-func addBillToDB(ctx workflow.Context, bill *Bill, logger log.Logger) {
-	workflow.Go(ctx, func(ctx workflow.Context) {
-		err := workflow.ExecuteActivity(ctx, "AddToDB", bill).Get(ctx, nil)
-		if err != nil {
-			logger.Error("Error executing AddToDB activity", "Error", err)
-		}
-	})
 }

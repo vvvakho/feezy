@@ -3,7 +3,8 @@ package main
 import (
 	"log"
 
-	billing "github.com/vvvakho/feezy/workflows"
+	db "github.com/vvvakho/feezy/db/postgres"
+	"github.com/vvvakho/feezy/workflow"
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/worker"
 )
@@ -18,10 +19,9 @@ func main() {
 
 	// Initialize DB connection
 	//TODO: DB using Encore
-	dbConn := "postgres"
 
 	// Instantiate Activities struct
-	activities := &billing.Activities{DB: dbConn}
+	activities := &workflow.Activities{DB: &db.PostgresBillStorage{}}
 
 	// Create a worker pool for delegating tasks
 
@@ -29,7 +29,7 @@ func main() {
 	w := worker.New(c, "create-bill-queue", worker.Options{}) //TODO: save the queue names in separate file
 
 	// Register Workflow and Activities
-	w.RegisterWorkflow(billing.BillWorkflow)
+	w.RegisterWorkflow(workflow.BillWorkflow)
 	w.RegisterActivity(activities)
 
 	// Start worker

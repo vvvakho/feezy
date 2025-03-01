@@ -6,7 +6,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	billing "github.com/vvvakho/feezy/workflows"
+	"github.com/vvvakho/feezy/domain"
+	"github.com/vvvakho/feezy/workflow"
 	"go.temporal.io/api/enums/v1"
 	"go.temporal.io/sdk/client"
 )
@@ -27,7 +28,7 @@ func CreateBill(ctx context.Context, req *CreateBillRequest) (*CreateBillRespons
 	//TODO: basic input validation before initializing client
 	// check if user exists
 
-	_, err := billing.IsValidCurrency(req.Currency)
+	_, err := domain.IsValidCurrency(req.Currency)
 	if err != nil {
 		return nil, err
 	}
@@ -45,19 +46,19 @@ func CreateBill(ctx context.Context, req *CreateBillRequest) (*CreateBillRespons
 		return nil, fmt.Errorf("Unable to initialize bill ID: %v", err)
 	}
 
-	bill := billing.Bill{
+	bill := domain.Bill{
 		ID:     billID,
 		UserID: req.UserID,
-		Items:  []billing.Item{},
-		Total:  billing.Money{Amount: 0, Currency: req.Currency},
-		Status: billing.BillOpen,
+		Items:  []domain.Item{},
+		Total:  domain.Money{Amount: 0, Currency: req.Currency},
+		Status: domain.BillOpen,
 	}
 
 	// Start workflow asynchronously
 	_, err = c.ExecuteWorkflow(ctx, client.StartWorkflowOptions{
 		ID:        billID.String(), //TODO: may need to edit workflow id to not just be bill id
 		TaskQueue: "create-bill-queue",
-	}, billing.BillWorkflow, bill)
+	}, workflow.BillWorkflow, bill)
 
 	if err != nil {
 		return nil, fmt.Errorf("Unable to initiate workflow: %v", err)
@@ -71,13 +72,13 @@ type GetBillRequest struct {
 }
 
 type GetBillResponse struct {
-	ID        string         `json:"id"`
-	Items     []billing.Item `json:"items"`
-	Total     billing.Money  `json:"total"`
-	Status    billing.Status `json:"status"`
-	UserID    string         `json:"userId"`
-	CreatedAt time.Time      `json:"createdAt"`
-	UpdatedAt time.Time      `json:"updatedAt"`
+	ID        string        `json:"id"`
+	Items     []domain.Item `json:"items"`
+	Total     domain.Money  `json:"total"`
+	Status    domain.Status `json:"status"`
+	UserID    string        `json:"userId"`
+	CreatedAt time.Time     `json:"createdAt"`
+	UpdatedAt time.Time     `json:"updatedAt"`
 }
 
 //encore:api public method=GET path=/bills/:id
@@ -95,7 +96,7 @@ func GetBill(ctx context.Context, id string) (*GetBillResponse, error) {
 	}
 	defer c.Close()
 
-	var billState billing.Bill //TODO: syntax...
+	var billState domain.Bill //TODO: syntax...
 
 	// Start signal synchronously
 	resp, err := c.QueryWorkflow(ctx, id, "", "getBill")
@@ -124,7 +125,7 @@ type AddLineItemToBillRequest struct {
 	ID           string
 	Quantity     int64
 	Description  string
-	PricePerUnit billing.Money
+	PricePerUnit domain.Money
 }
 
 type AddLineItemToBillResponse struct {
@@ -134,7 +135,7 @@ type AddLineItemToBillResponse struct {
 //encore:api public method=POST path=/bills/:id/items
 func AddLineItemToBill(ctx context.Context, id string, req AddLineItemToBillRequest) (*AddLineItemToBillResponse, error) {
 	// Validate input
-	_, err := billing.IsValidCurrency(req.PricePerUnit.Currency)
+	_, err := domain.IsValidCurrency(req.PricePerUnit.Currency)
 	if err != nil {
 		return &AddLineItemToBillResponse{}, err
 	}
@@ -157,14 +158,14 @@ func AddLineItemToBill(ctx context.Context, id string, req AddLineItemToBillRequ
 		return nil, fmt.Errorf("Invalid ID: %v", err)
 	}
 
-	billItem := billing.Item{
+	billItem := domain.Item{
 		ID:           itemID,
 		Quantity:     req.Quantity,
 		Description:  req.Description,
 		PricePerUnit: req.PricePerUnit,
 	}
 
-	err = c.SignalWorkflow(ctx, id, "", "addLineItem", billing.AddItemSignal{LineItem: billItem})
+	err = c.SignalWorkflow(ctx, id, "", "addLineItem", workflow.AddItemSignal{LineItem: billItem})
 	if err != nil {
 		return nil, fmt.Errorf("Error signaling addLineItem task: %v", err)
 	}
@@ -178,7 +179,7 @@ type RemoveLineItemFromBillRequest struct {
 	ID           string
 	Quantity     int64
 	Description  string
-	PricePerUnit billing.Money
+	PricePerUnit domain.Money
 }
 
 type RemoveLineItemFromBillResponse struct {
@@ -207,14 +208,14 @@ func RemoveLineItemToBill(ctx context.Context, id string, req RemoveLineItemFrom
 		return nil, fmt.Errorf("Invalid ID: %v", err)
 	}
 
-	billItem := billing.Item{
+	billItem := domain.Item{
 		ID:           itemID,
 		Quantity:     req.Quantity,
 		Description:  req.Description,
 		PricePerUnit: req.PricePerUnit,
 	}
 
-	err = c.SignalWorkflow(ctx, id, "", "removeLineItem", billing.AddItemSignal{LineItem: billItem})
+	err = c.SignalWorkflow(ctx, id, "", "removeLineItem", workflow.AddItemSignal{LineItem: billItem})
 	if err != nil {
 		return nil, fmt.Errorf("Error signaling removeLineItem task: %v", err)
 	}

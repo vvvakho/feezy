@@ -1,21 +1,22 @@
-package billing
+package workflow
 
 import (
 	"fmt"
 	"time"
 
 	"github.com/mitchellh/mapstructure"
+	"github.com/vvvakho/feezy/domain"
 	"go.temporal.io/sdk/log"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 )
 
-func initWorkflow(ctx workflow.Context, bill *Bill) (workflow.Context, log.Logger, workflow.Channel, error) {
+func initWorkflow(ctx workflow.Context, bill *domain.Bill) (workflow.Context, log.Logger, workflow.Channel, error) {
 	logger := workflow.GetLogger(ctx)
 	errCh := workflow.NewChannel(ctx)
 
 	// Register handler for GetBill
-	if err := workflow.SetQueryHandler(ctx, "getBill", func(input []byte) (*Bill, error) {
+	if err := workflow.SetQueryHandler(ctx, "getBill", func(input []byte) (*domain.Bill, error) {
 		return bill, nil
 	}); err != nil {
 		return nil, nil, nil, fmt.Errorf("SetQueryHandler failed: %v", err) //TODO: double check when to fatal vs log
@@ -38,7 +39,7 @@ func registerSignalHandlers(
 	ctx workflow.Context,
 	selector workflow.Selector,
 	addLineItemChan, removeLineItemChan, closeBillChan workflow.ReceiveChannel,
-	bill *Bill,
+	bill *domain.Bill,
 	logger log.Logger,
 ) {
 
@@ -84,16 +85,16 @@ func registerErrorHandler(
 	})
 }
 
-func handleAddLineItemSignal(ctx workflow.Context, c workflow.ReceiveChannel, bill *Bill, logger log.Logger) error {
+func handleAddLineItemSignal(ctx workflow.Context, c workflow.ReceiveChannel, bill *domain.Bill, logger log.Logger) error {
 	var addSignal AddItemSignal
 	c.Receive(ctx, &addSignal)
 
 	lineItem := addSignal.LineItem
-	if err := bill.addLineItem(lineItem); err != nil {
+	if err := bill.AddLineItem(lineItem); err != nil {
 		return err
 	}
 
-	if err := bill.calculateTotal(); err != nil {
+	if err := bill.CalculateTotal(); err != nil {
 		return err
 	}
 
@@ -103,16 +104,16 @@ func handleAddLineItemSignal(ctx workflow.Context, c workflow.ReceiveChannel, bi
 	return nil
 }
 
-func handleRemoveLineItemSignal(ctx workflow.Context, c workflow.ReceiveChannel, bill *Bill, logger log.Logger) error {
+func handleRemoveLineItemSignal(ctx workflow.Context, c workflow.ReceiveChannel, bill *domain.Bill, logger log.Logger) error {
 	var removeSignal RemoveItemSignal
 	c.Receive(ctx, &removeSignal)
 
 	lineItem := removeSignal.LineItem
-	if err := bill.removeLineItem(lineItem); err != nil {
+	if err := bill.RemoveLineItem(lineItem); err != nil {
 		return err
 	}
 
-	if err := bill.calculateTotal(); err != nil {
+	if err := bill.CalculateTotal(); err != nil {
 		return err
 	}
 
@@ -121,7 +122,7 @@ func handleRemoveLineItemSignal(ctx workflow.Context, c workflow.ReceiveChannel,
 	return nil
 }
 
-func handleCloseBillSignal(ctx workflow.Context, c workflow.ReceiveChannel, bill *Bill, logger log.Logger) error {
+func handleCloseBillSignal(ctx workflow.Context, c workflow.ReceiveChannel, bill *domain.Bill, logger log.Logger) error {
 	var closeSignal CloseBillSignal
 	c.Receive(ctx, &closeSignal)
 
@@ -130,14 +131,23 @@ func handleCloseBillSignal(ctx workflow.Context, c workflow.ReceiveChannel, bill
 		return fmt.Errorf("Invalid signal type: %v", err)
 	}
 
-	if err := bill.calculateTotal(); err != nil {
+	if err := bill.CalculateTotal(); err != nil {
 		return fmt.Errorf("Error calculating bill total: %v", err)
 	}
 
-	bill.Status = BillClosed
+	bill.Status = domain.BillClosed
 
 	// Update bill total in DB asynchronously
 	addBillToDB(ctx, bill, logger)
 
 	return nil
+}
+
+func addBillToDB(ctx workflow.Context, bill *domain.Bill, logger log.Logger) {
+	workflow.Go(ctx, func(ctx workflow.Context) {
+		err := workflow.ExecuteActivity(ctx, "AddToDB", bill).Get(ctx, nil)
+		if err != nil {
+			logger.Error("Error executing AddToDB activity", "Error", err)
+		}
+	})
 }
