@@ -36,6 +36,7 @@ type Money struct {
 type Status string
 
 var BillOpen Status = "BillOpen"
+var BillClosing Status = "BillClosing"
 var BillClosed Status = "BillClosed"
 
 var ValidCurrency = map[string]struct{}{

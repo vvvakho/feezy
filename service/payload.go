@@ -52,7 +52,8 @@ type RemoveLineItemFromBillResponse struct {
 }
 
 type CloseBillRequest struct {
-	ID string `json:"user_id"`
+	ID        string `json:"user_id"`
+	RequestID string `json:"request_id"`
 }
 
 type CloseBillResponse struct {

@@ -13,5 +13,6 @@ type RemoveItemSignal struct {
 }
 
 type CloseBillSignal struct {
-	Route string
+	Route     string
+	RequestID string
 }

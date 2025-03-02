@@ -1,10 +1,10 @@
 package workflow
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
-	"github.com/mitchellh/mapstructure"
 	"github.com/vvvakho/feezy/domain"
 	"go.temporal.io/sdk/log"
 	"go.temporal.io/sdk/temporal"
@@ -14,6 +14,9 @@ import (
 func initWorkflow(ctx workflow.Context, bill *domain.Bill) (workflow.Context, log.Logger, workflow.Channel, error) {
 	logger := workflow.GetLogger(ctx)
 	errCh := workflow.NewChannel(ctx)
+
+	bill.CreatedAt = time.Now()
+	bill.UpdatedAt = time.Now()
 
 	// Register handler for GetBill
 	if err := workflow.SetQueryHandler(ctx, "getBill", func(input []byte) (*domain.Bill, error) {
@@ -98,6 +101,8 @@ func handleAddLineItemSignal(ctx workflow.Context, c workflow.ReceiveChannel, bi
 		return err
 	}
 
+	bill.UpdatedAt = time.Now()
+
 	// Update bill total in DB asynchronously
 	// addBillToDB(ctx, bill, logger)
 
@@ -117,29 +122,43 @@ func handleRemoveLineItemSignal(ctx workflow.Context, c workflow.ReceiveChannel,
 		return err
 	}
 
+	bill.UpdatedAt = time.Now()
+
 	// Update bill total in DB asynchronously
 	// addBillToDB(ctx, bill, logger)
 	return nil
 }
 
 func handleCloseBillSignal(ctx workflow.Context, c workflow.ReceiveChannel, bill *domain.Bill, logger log.Logger) error {
-	var closeSignal CloseBillSignal
-	c.Receive(ctx, &closeSignal)
+	for {
+		var closeSignal CloseBillSignal
+		c.Receive(ctx, &closeSignal)
 
-	err := mapstructure.Decode(closeSignal, &closeSignal)
-	if err != nil {
-		return fmt.Errorf("Invalid signal type: %v", err)
-	}
+		if err := bill.CalculateTotal(); err != nil {
+			logger.Error("Error calculating bill total", "Error", err)
+			continue // Keep waiting for a valid signal
+		}
 
-	if err := bill.CalculateTotal(); err != nil {
-		return fmt.Errorf("Error calculating bill total: %v", err)
-	}
+		bill.Status = domain.BillClosing
 
-	bill.Status = domain.BillClosed
-	err = workflow.ExecuteActivity(ctx, "AddToDB", bill).Get(ctx, nil)
-	if err != nil {
-		logger.Error("Error executing AddToDB activity", "Error", err)
-		return err
+		// Execute activity with retry logic
+		err := workflow.ExecuteActivity(ctx, "AddClosedBillToDB", bill, closeSignal.RequestID).Get(ctx, nil)
+		if err != nil {
+			var appErr *temporal.ApplicationError
+			if errors.As(err, &appErr) && appErr.Type() == "DuplicateRequestError" {
+				logger.Warn("Duplicate request detected, waiting for new request")
+				continue // Keep waiting for a correct request ID
+			}
+			logger.Error("Error executing AddClosedBillToDB activity", "Error", err)
+			return err // For other errors, fail the workflow
+		}
+
+		// Successfully closed the bill, exit loop
+		bill.Status = domain.BillClosed
+		bill.UpdatedAt = time.Now()
+
+		logger.Info("Bill successfully saved as closed in DB", "BillID", bill.ID)
+		break
 	}
 
 	return nil

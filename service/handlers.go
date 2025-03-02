@@ -20,13 +20,6 @@ func (s *Service) CreateBill(ctx context.Context, req *CreateBillRequest) (*Crea
 		return nil, err
 	}
 
-	// Initialize client for Temporal connection
-	c, err := client.Dial(client.Options{}) //TODO: add connection options
-	if err != nil {
-		return nil, fmt.Errorf("Error connecting to Temporal server: %v", err)
-	}
-	defer c.Close()
-
 	// Generate a unique Bill ID
 	billID, err := uuid.NewV7()
 	if err != nil {
@@ -42,6 +35,7 @@ func (s *Service) CreateBill(ctx context.Context, req *CreateBillRequest) (*Crea
 	}
 
 	// Start workflow asynchronously
+	c := *s.TemporalClient
 	_, err = c.ExecuteWorkflow(ctx, client.StartWorkflowOptions{
 		ID:        billID.String(), //TODO: may need to edit workflow id to not just be bill id
 		TaskQueue: "create-bill-queue",
@@ -61,17 +55,10 @@ func (s *Service) GetBill(ctx context.Context, id string) (*GetBillResponse, err
 	// we'll be removing records from temporal after they complete
 	// so maybe check temporal, then its status, and if not present then check db
 
-	// Initialize client for Temporal connection
-	//TODO: perhaps we could have methods on a server struct so that initialization happens once?
-	c, err := client.Dial(client.Options{}) //TODO: add connection options
-	if err != nil {
-		return nil, fmt.Errorf("Error connecting to Temporal server: %v", err)
-	}
-	defer c.Close()
-
 	var billState domain.Bill //TODO: syntax...
 
 	// Start signal synchronously
+	c := *s.TemporalClient
 	resp, err := c.QueryWorkflow(ctx, id, "", "getBill")
 	if err != nil {
 		return nil, fmt.Errorf("Unable to initiate query signal: %v", err)
@@ -106,11 +93,7 @@ func (s *Service) AddLineItemToBill(ctx context.Context, id string, req AddLineI
 	}
 
 	// Initialize Temporal client
-	c, err := client.Dial(client.Options{})
-	if err != nil {
-		return nil, fmt.Errorf("Error connecting to Temporal server: %v", err) //TODO: refactor to custom error
-	}
-	defer c.Close()
+	c := *s.TemporalClient
 
 	// Check if bill exists and is active
 	ok, err := isWorkflowRunning(c, id)
@@ -145,11 +128,7 @@ func (s *Service) AddLineItemToBill(ctx context.Context, id string, req AddLineI
 //encore:api public method=PATCH path=/bills/:id/items
 func (s *Service) RemoveLineItemToBill(ctx context.Context, id string, req RemoveLineItemFromBillRequest) (*RemoveLineItemFromBillResponse, error) {
 	// Initialize Temporal client
-	c, err := client.Dial(client.Options{})
-	if err != nil {
-		return nil, fmt.Errorf("Error connecting to Temporal server: %v", err) //TODO: refactor to custom error
-	}
-	defer c.Close()
+	c := *s.TemporalClient
 
 	// Check if bill exists and is active
 	ok, err := isWorkflowRunning(c, id)
@@ -178,17 +157,13 @@ func (s *Service) RemoveLineItemToBill(ctx context.Context, id string, req Remov
 }
 
 //encore:api public method=POST path=/bills/:id
-func (s *Service) CloseBill(ctx context.Context, id string) (*CloseBillResponse, error) {
+func (s *Service) CloseBill(ctx context.Context, id string, req CloseBillRequest) (*CloseBillResponse, error) {
 	//TODO: check if bill active
 
 	// Query Temporal to check if workflow is active
 
 	// Connect to Temporal
-	c, err := client.Dial(client.Options{}) //TODO: add connection options
-	if err != nil {
-		return nil, fmt.Errorf("Error connecting to Temporal server: %v", err)
-	}
-	defer c.Close()
+	c := *s.TemporalClient
 
 	// Check if workflow is running
 	ok, err := isWorkflowRunning(c, id)
@@ -200,7 +175,11 @@ func (s *Service) CloseBill(ctx context.Context, id string) (*CloseBillResponse,
 	//   Route: "closeBillSignal",
 	// }
 
-	err = c.SignalWorkflow(ctx, id, "", "closeBill", nil)
+	if req.RequestID == "" {
+		req.RequestID = uuid.NewString()
+	}
+
+	err = c.SignalWorkflow(ctx, id, "", "closeBill", workflow.CloseBillSignal{RequestID: req.RequestID})
 	if err != nil {
 		return nil, fmt.Errorf("Error signaling CloseBill task: %v", err)
 	}

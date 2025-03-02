@@ -5,10 +5,10 @@ go 1.23.4
 require (
 	encore.dev v1.46.1
 	github.com/google/uuid v1.6.0
+	github.com/lib/pq v1.10.9
 	github.com/mitchellh/mapstructure v1.5.0
 	go.temporal.io/api v1.44.1
 	go.temporal.io/sdk v1.33.0
-	golang.org/x/net v0.28.0
 )
 
 require (
@@ -30,6 +30,7 @@ require (
 	github.com/stretchr/testify v1.10.0 // indirect
 	go.uber.org/atomic v1.10.0 // indirect
 	golang.org/x/crypto v0.26.0 // indirect
+	golang.org/x/net v0.28.0 // indirect
 	golang.org/x/sync v0.8.0 // indirect
 	golang.org/x/sys v0.24.0 // indirect
 	golang.org/x/text v0.17.0 // indirect
