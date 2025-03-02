@@ -1,7 +1,12 @@
 package workflow
 
 import (
+	"fmt"
+	"time"
+
+	"github.com/google/uuid"
 	"github.com/vvvakho/feezy/domain"
+	"go.temporal.io/sdk/log"
 	"go.temporal.io/sdk/workflow"
 )
 
@@ -12,8 +17,12 @@ func BillWorkflow(ctx workflow.Context, bill *domain.Bill) error {
 		return err //TODO: fatal
 	}
 
-	// Asynchronously add bill to DB
-	// addBillToDB(ctx, &bill, logger)
+	// Asynchronously add bill to `open_bills` DB
+	requestID := uuid.NewString()
+	err = workflow.ExecuteActivity(ctx, AddOpenBillToDB, bill, requestID).Get(ctx, nil)
+	if err != nil {
+		return err
+	}
 
 	// Set up handlers for signals
 	addLineItemChan := workflow.GetSignalChannel(ctx, AddLineItemRoute.Name)
@@ -43,4 +52,22 @@ func BillWorkflow(ctx workflow.Context, bill *domain.Bill) error {
 	}
 
 	return nil
+}
+
+func initWorkflow(ctx workflow.Context, bill *domain.Bill) (workflow.Context, log.Logger, error) {
+	logger := workflow.GetLogger(ctx)
+
+	bill.CreatedAt = time.Now()
+	bill.UpdatedAt = time.Now()
+
+	// Register handler for GetBill
+	if err := workflow.SetQueryHandler(ctx, "getBill", func(input []byte) (*domain.Bill, error) {
+		return bill, nil
+	}); err != nil {
+		return nil, nil, fmt.Errorf("SetQueryHandler failed: %v", err) //TODO: double check when to fatal vs log
+	}
+
+	ctx = workflow.WithActivityOptions(ctx, ao)
+
+	return ctx, logger, nil
 }

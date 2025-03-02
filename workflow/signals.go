@@ -2,7 +2,6 @@ package workflow
 
 import (
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/vvvakho/feezy/domain"
@@ -11,30 +10,33 @@ import (
 	"go.temporal.io/sdk/workflow"
 )
 
-func initWorkflow(ctx workflow.Context, bill *domain.Bill) (workflow.Context, log.Logger, error) {
-	logger := workflow.GetLogger(ctx)
+type AddItemSignal struct {
+	LineItem domain.Item
+}
 
-	bill.CreatedAt = time.Now()
-	bill.UpdatedAt = time.Now()
+type RemoveItemSignal struct {
+	LineItem domain.Item
+}
 
-	// Register handler for GetBill
-	if err := workflow.SetQueryHandler(ctx, "getBill", func(input []byte) (*domain.Bill, error) {
-		return bill, nil
-	}); err != nil {
-		return nil, nil, fmt.Errorf("SetQueryHandler failed: %v", err) //TODO: double check when to fatal vs log
-	}
+type CloseBillSignal struct {
+	Route     string
+	RequestID string
+}
 
-	ao := workflow.ActivityOptions{
-		StartToCloseTimeout: time.Minute, //TODO: investigate closer
-		RetryPolicy: &temporal.RetryPolicy{
-			InitialInterval:    time.Second,
-			MaximumInterval:    time.Minute,
-			BackoffCoefficient: 2,
-		},
-	}
-	ctx = workflow.WithActivityOptions(ctx, ao)
+type SignalRoute struct {
+	Name string
+}
 
-	return ctx, logger, nil
+var AddLineItemRoute = SignalRoute{
+	Name: "addLineItem",
+}
+
+var RemoveLineItemRoute = SignalRoute{
+	Name: "removeLineItem",
+}
+
+var CloseBillRoute = SignalRoute{
+	Name: "CloseBillSignal",
 }
 
 func registerSignalHandlers(
@@ -122,7 +124,7 @@ func handleCloseBillSignal(ctx workflow.Context, c workflow.ReceiveChannel, bill
 		bill.Status = domain.BillClosing
 
 		// Execute activity with retry logic
-		err := workflow.ExecuteActivity(ctx, "AddClosedBillToDB", bill, closeSignal.RequestID).Get(ctx, nil)
+		err := workflow.ExecuteActivity(ctx, AddClosedBillToDB, bill, closeSignal.RequestID).Get(ctx, nil)
 		if err != nil {
 			var appErr *temporal.ApplicationError
 			if errors.As(err, &appErr) && appErr.Type() == "DuplicateRequestError" {

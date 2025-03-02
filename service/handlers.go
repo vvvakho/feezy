@@ -45,27 +45,44 @@ func (s *Service) CreateBill(ctx context.Context, req *CreateBillRequest) (*Crea
 //
 //encore:api public method=GET path=/bills/:id
 func (s *Service) GetBill(ctx context.Context, id string) (*GetBillResponse, error) {
-	// Check whether bill is active and in Temporal
-	if err := isWorkflowRunning(s.TemporalClient, id); err != nil {
-		// Check if bill is closed and in DB
-		//TODO: s.DB.Query(ctx)
-		return nil, fmt.Errorf("Bill not found or already closed: %v", err)
+	// Step 1: Check if bill exists in open_bills DB
+	_, err := s.GetOpenBillFromDB(ctx, id)
+	if err == nil {
+		// Step 2: Check if the workflow is running (only if bill is open)
+		if err := isWorkflowRunning(s.TemporalClient, id); err == nil {
+			var bill domain.Bill
+
+			// Step 3: Query Temporal Workflow for Bill Details
+			if err := getBillQuery(ctx, s.TemporalClient, id, &bill); err != nil {
+				return nil, fmt.Errorf("Unable to query bill from Temporal: %v", err)
+			}
+
+			return &GetBillResponse{
+				ID:        bill.ID.String(),
+				Items:     bill.Items,
+				Total:     bill.Total,
+				Status:    bill.Status,
+				UserID:    bill.UserID,
+				CreatedAt: bill.CreatedAt,
+				UpdatedAt: bill.UpdatedAt,
+			}, nil
+		}
 	}
 
-	var bill domain.Bill
-
-	if err := getBillQuery(ctx, s.TemporalClient, id, &bill); err != nil {
-		return &GetBillResponse{}, fmt.Errorf("Unable to initiate bill query: %v", err)
+	// Step 4: If bill is not in open_bills, check closed_bills DB
+	closedBill, err := s.GetClosedBillFromDB(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("Bill not found: %v", err)
 	}
 
 	return &GetBillResponse{
-		ID:        bill.ID.String(),
-		Items:     bill.Items,
-		Total:     bill.Total,
-		Status:    bill.Status,
-		UserID:    bill.UserID,
-		CreatedAt: bill.CreatedAt,
-		UpdatedAt: bill.UpdatedAt,
+		ID:        closedBill.ID.String(),
+		Items:     nil, // TODO: implement table for items detail
+		Total:     closedBill.Total,
+		Status:    closedBill.Status,
+		UserID:    closedBill.UserID,
+		CreatedAt: closedBill.CreatedAt,
+		UpdatedAt: closedBill.UpdatedAt,
 	}, nil
 }
 
@@ -100,7 +117,7 @@ func (s *Service) AddLineItemToBill(ctx context.Context, id string, req *AddLine
 		return &AddLineItemResponse{}, fmt.Errorf("Unable to add line item to bill: %v", err)
 	}
 
-	return &AddLineItemResponse{Message: "ok"}, nil
+	return &AddLineItemResponse{Message: "Request has been sent"}, nil
 }
 
 //TODO: is PATCH appropriate ??
@@ -136,7 +153,7 @@ func (s *Service) RemoveLineItemFromBill(ctx context.Context, id string, req *Re
 		return &RemoveLineItemResponse{}, fmt.Errorf("Error signaling removeLineItem task: %v", err)
 	}
 
-	return &RemoveLineItemResponse{Message: "ok"}, nil
+	return &RemoveLineItemResponse{Message: "Request has been sent"}, nil
 }
 
 // CloseBill finalizes an open bill, preventing further modifications.
@@ -161,5 +178,5 @@ func (s *Service) CloseBill(ctx context.Context, id string, req *CloseBillReques
 		return nil, fmt.Errorf("Error signaling CloseBill task: %v", err)
 	}
 
-	return &CloseBillResponse{Status: "Success"}, nil //TODO: appropriate response?
+	return &CloseBillResponse{Status: "Request has been sent"}, nil //TODO: appropriate response?
 }

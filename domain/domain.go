@@ -17,6 +17,7 @@ type Bill struct {
 	UserID    string
 	CreatedAt time.Time
 	UpdatedAt time.Time
+	ClosedAt  time.Time
 }
 
 type Item struct {
