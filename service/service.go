@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"encore.dev/storage/sqldb"
-	"github.com/vvvakho/feezy/activity"
 	"github.com/vvvakho/feezy/workflow"
 	"go.temporal.io/api/enums/v1"
 	"go.temporal.io/sdk/client"
@@ -38,6 +37,8 @@ func initService() (*Service, error) {
 		return nil, err
 	}
 
+	fmt.Printf("INITIALIZING DB %v", BillsDB)
+
 	return &Service{
 		TemporalClient: &c,
 		Worker:         w,
@@ -59,7 +60,7 @@ func initWorker(c client.Client) (*worker.Worker, error) {
 	w := worker.New(c, "create-bill-queue", worker.Options{})
 
 	// Instantiate Activities struct
-	activities := &activity.Activities{
+	activities := &workflow.Activities{
 		DB: BillsDB,
 	}
 

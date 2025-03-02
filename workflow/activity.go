@@ -1,4 +1,4 @@
-package activity
+package workflow
 
 import (
 	"context"
@@ -17,7 +17,7 @@ func (a *Activities) AddToDB(ctx context.Context, bill domain.Bill, db *sqldb.Da
 	fmt.Printf("Saving bill %s to DB\n", bill.ID)
 	_, err := a.DB.Exec(ctx, `
 		INSERT INTO closed_bills (
-			ID, UserID, Status, TotalAmount, Currency, CreatedAt, UpdatedAt, ClosedAt)
+			id, user_id, status, total_amount, currency, created_at, updated_at, closed_at)
 		VALUES (
 			$1, $2, $3, $4, $5, $6, $7, $8
 		)

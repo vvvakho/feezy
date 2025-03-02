@@ -136,18 +136,11 @@ func handleCloseBillSignal(ctx workflow.Context, c workflow.ReceiveChannel, bill
 	}
 
 	bill.Status = domain.BillClosed
-
-	// Update bill total in DB asynchronously
-	addBillToDB(ctx, bill, logger)
+	err = workflow.ExecuteActivity(ctx, "AddToDB", bill).Get(ctx, nil)
+	if err != nil {
+		logger.Error("Error executing AddToDB activity", "Error", err)
+		return err
+	}
 
 	return nil
-}
-
-func addBillToDB(ctx workflow.Context, bill *domain.Bill, logger log.Logger) {
-	workflow.Go(ctx, func(ctx workflow.Context) {
-		err := workflow.ExecuteActivity(ctx, "AddToDB", bill).Get(ctx, nil)
-		if err != nil {
-			logger.Error("Error executing AddToDB activity", "Error", err)
-		}
-	})
 }
