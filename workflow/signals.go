@@ -50,7 +50,6 @@ func registerSignalHandlers(
 	selector.AddReceive(addLineItemChan, func(c workflow.ReceiveChannel, _ bool) {
 		if err := handleAddLineItemSignal(ctx, c, bill, logger); err != nil {
 			logger.Error("Error adding item to bill", "Error", err)
-			// errCh.Send(ctx, fmt.Errorf("Error adding item to bill: %v", err))
 		}
 	})
 
@@ -58,7 +57,6 @@ func registerSignalHandlers(
 	selector.AddReceive(removeLineItemChan, func(c workflow.ReceiveChannel, _ bool) {
 		if err := handleRemoveLineItemSignal(ctx, c, bill, logger); err != nil {
 			logger.Error("Error removing item from bill", "Error", err)
-			// errCh.Send(ctx, fmt.Errorf("Error removing item from bill: %v", err))
 		}
 	})
 
@@ -66,7 +64,6 @@ func registerSignalHandlers(
 	selector.AddReceive(closeBillChan, func(c workflow.ReceiveChannel, _ bool) {
 		if err := handleCloseBillSignal(ctx, c, bill, logger); err != nil {
 			logger.Error("Error closing bill", "Error", err)
-			// errCh.Send(ctx, fmt.Errorf("Error removing item from bill: %v", err))
 		}
 	})
 

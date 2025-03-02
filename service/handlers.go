@@ -7,98 +7,68 @@ import (
 	"github.com/google/uuid"
 	"github.com/vvvakho/feezy/domain"
 	"github.com/vvvakho/feezy/workflow"
-	"go.temporal.io/sdk/client"
 )
 
 // encore: api public method=POST path=/bills
 func (s *Service) CreateBill(ctx context.Context, req *CreateBillRequest) (*CreateBillResponse, error) {
-	//TODO: basic input validation before initializing client
-	// check if user exists
-
-	_, err := domain.IsValidCurrency(req.Currency)
-	if err != nil {
-		return nil, err
+	if err := validateCreateBillRequest(req); err != nil {
+		return &CreateBillResponse{}, fmt.Errorf("Could not validate request: %v", err)
 	}
 
-	// Generate a unique Bill ID
-	billID, err := uuid.NewV7()
+	bill, err := domain.NewBill(req.UserID, req.Currency)
 	if err != nil {
-		return nil, fmt.Errorf("Unable to initialize bill ID: %v", err)
-	}
-
-	bill := domain.Bill{
-		ID:     billID,
-		UserID: req.UserID,
-		Items:  []domain.Item{},
-		Total:  domain.Money{Amount: 0, Currency: req.Currency},
-		Status: domain.BillOpen,
+		return &CreateBillResponse{}, fmt.Errorf("Could not validate bill parameters: %v", err)
 	}
 
 	// Start workflow asynchronously
-	c := *s.TemporalClient
-	_, err = c.ExecuteWorkflow(ctx, client.StartWorkflowOptions{
-		ID:        billID.String(), //TODO: may need to edit workflow id to not just be bill id
-		TaskQueue: "create-bill-queue",
-	}, workflow.BillWorkflow, bill)
-
+	err = createBillWorkflow(ctx, s.TemporalClient, &bill)
 	if err != nil {
-		return nil, fmt.Errorf("Unable to initiate workflow: %v", err)
+		return &CreateBillResponse{}, fmt.Errorf("Could not create bill: %v", err)
 	}
 
-	return &CreateBillResponse{ID: billID.String()}, nil
+	return &CreateBillResponse{
+		ID:        bill.ID.String(),
+		UserID:    bill.UserID,
+		Currency:  bill.Total.Currency,
+		CreatedAt: bill.CreatedAt,
+		Status:    string(bill.Status),
+	}, nil
 }
 
 //encore:api public method=GET path=/bills/:id
 func (s *Service) GetBill(ctx context.Context, id string) (*GetBillResponse, error) {
-	//TODO: check if bill active
-	// do we first check db for closed bill or do we first try temporal?
-	// we'll be removing records from temporal after they complete
-	// so maybe check temporal, then its status, and if not present then check db
-
-	var billState domain.Bill //TODO: syntax...
-
-	// Start signal synchronously
-	c := *s.TemporalClient
-	resp, err := c.QueryWorkflow(ctx, id, "", "getBill")
-	if err != nil {
-		return nil, fmt.Errorf("Unable to initiate query signal: %v", err)
+	// Check whether bill is active and in Temporal
+	if err := isWorkflowRunning(s.TemporalClient, id); err != nil {
+		// Check if bill is closed and in DB
+		//TODO: s.DB.Query(ctx)
+		return nil, fmt.Errorf("Bill not found or already closed: %v", err)
 	}
-	err = resp.Get(&billState)
-	if err != nil {
-		return nil, fmt.Errorf("Unable to parse query response into Bill: %v", err)
+
+	var bill domain.Bill
+
+	if err := getBillQuery(ctx, s.TemporalClient, id, &bill); err != nil {
+		return &GetBillResponse{}, fmt.Errorf("Unable to initiate bill query: %v", err)
 	}
 
 	return &GetBillResponse{
-		ID:        billState.ID.String(),
-		Items:     billState.Items,
-		Total:     billState.Total,
-		Status:    billState.Status,
-		UserID:    billState.UserID,
-		CreatedAt: billState.CreatedAt,
-		UpdatedAt: billState.UpdatedAt,
+		ID:        bill.ID.String(),
+		Items:     bill.Items,
+		Total:     bill.Total,
+		Status:    bill.Status,
+		UserID:    bill.UserID,
+		CreatedAt: bill.CreatedAt,
+		UpdatedAt: bill.UpdatedAt,
 	}, nil
-
-	//TODO: logic if workflow no longer in Temporal
 }
 
 //encore:api public method=POST path=/bills/:id/items
-func (s *Service) AddLineItemToBill(ctx context.Context, id string, req AddLineItemToBillRequest) (*AddLineItemToBillResponse, error) {
-	// Validate input
-	if req.Quantity < 1 {
-		return &AddLineItemToBillResponse{}, fmt.Errorf("Invalid item quantity: %v", req.Quantity)
-	}
-	_, err := domain.IsValidCurrency(req.PricePerUnit.Currency)
-	if err != nil {
-		return &AddLineItemToBillResponse{}, err
+func (s *Service) AddLineItemToBill(ctx context.Context, id string, req AddLineItemRequest) (*AddLineItemResponse, error) {
+	if err := validateAddLineItemRequest(&req); err != nil {
+		return &AddLineItemResponse{}, fmt.Errorf("Invalid request: %v", err)
 	}
 
-	// Initialize Temporal client
-	c := *s.TemporalClient
-
-	// Check if bill exists and is active
-	ok, err := isWorkflowRunning(c, id)
-	if !ok {
-		return nil, fmt.Errorf("Bill not found or already closed: %v", err) //TODO: refactor to custom error
+	if err := isWorkflowRunning(s.TemporalClient, id); err != nil {
+		return nil, fmt.Errorf("Bill not found or already closed: %v", err)
 	}
 
 	itemID, err := uuid.Parse(req.ID)
@@ -113,27 +83,24 @@ func (s *Service) AddLineItemToBill(ctx context.Context, id string, req AddLineI
 		PricePerUnit: req.PricePerUnit,
 	}
 
-	err = c.SignalWorkflow(ctx, id, "", "addLineItem", workflow.AddItemSignal{LineItem: billItem})
+	err = AddLineItemSignal(ctx, s.TemporalClient, id, &billItem)
 	if err != nil {
-		return nil, fmt.Errorf("Error signaling addLineItem task: %v", err)
+		return &AddLineItemResponse{}, fmt.Errorf("Unable to add line item to bill: %v", err)
 	}
 
-	return &AddLineItemToBillResponse{Message: "ok"}, nil
+	return &AddLineItemResponse{Message: "ok"}, nil
 }
-
-//TODO: BatchAddLineItems
 
 //TODO: is PATCH appropriate ??
 
 //encore:api public method=PATCH path=/bills/:id/items
-func (s *Service) RemoveLineItemToBill(ctx context.Context, id string, req RemoveLineItemFromBillRequest) (*RemoveLineItemFromBillResponse, error) {
-	// Initialize Temporal client
-	c := *s.TemporalClient
+func (s *Service) RemoveLineItemFromBill(ctx context.Context, id string, req RemoveLineItemRequest) (*RemoveLineItemResponse, error) {
+	if err := validateRemoveLineItemRequest(&req); err != nil {
+		return &RemoveLineItemResponse{}, fmt.Errorf("Invalid request: %v", err)
+	}
 
-	// Check if bill exists and is active
-	ok, err := isWorkflowRunning(c, id)
-	if !ok {
-		return nil, fmt.Errorf("Bill not found or already closed: %v", err) //TODO: refactor to custom error
+	if err := isWorkflowRunning(s.TemporalClient, id); err != nil {
+		return nil, fmt.Errorf("Bill not found or already closed: %v", err)
 	}
 
 	itemID, err := uuid.Parse(req.ID)
@@ -148,12 +115,12 @@ func (s *Service) RemoveLineItemToBill(ctx context.Context, id string, req Remov
 		PricePerUnit: req.PricePerUnit,
 	}
 
-	err = c.SignalWorkflow(ctx, id, "", "removeLineItem", workflow.AddItemSignal{LineItem: billItem})
+	err = RemoveLineItemSignal(ctx, s.TemporalClient, id, &billItem)
 	if err != nil {
-		return nil, fmt.Errorf("Error signaling removeLineItem task: %v", err)
+		return &RemoveLineItemResponse{}, fmt.Errorf("Error signaling removeLineItem task: %v", err)
 	}
 
-	return &RemoveLineItemFromBillResponse{Message: "ok"}, nil
+	return &RemoveLineItemResponse{Message: "ok"}, nil
 }
 
 //encore:api public method=POST path=/bills/:id
@@ -162,24 +129,16 @@ func (s *Service) CloseBill(ctx context.Context, id string, req CloseBillRequest
 
 	// Query Temporal to check if workflow is active
 
-	// Connect to Temporal
-	c := *s.TemporalClient
-
 	// Check if workflow is running
-	ok, err := isWorkflowRunning(c, id)
-	if !ok {
+	if err := isWorkflowRunning(s.TemporalClient, id); err != nil {
 		return nil, fmt.Errorf("Bill not found or already closed: %v", err)
 	}
-
-	// closeSignal := billing.CloseBillSignal{
-	//   Route: "closeBillSignal",
-	// }
 
 	if req.RequestID == "" {
 		req.RequestID = uuid.NewString()
 	}
 
-	err = c.SignalWorkflow(ctx, id, "", "closeBill", workflow.CloseBillSignal{RequestID: req.RequestID})
+	err := CloseBillSignal(ctx, s.TemporalClient, id, &workflow.CloseBillSignal{RequestID: req.RequestID})
 	if err != nil {
 		return nil, fmt.Errorf("Error signaling CloseBill task: %v", err)
 	}

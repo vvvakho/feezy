@@ -16,9 +16,9 @@ func BillWorkflow(ctx workflow.Context, bill domain.Bill) error {
 	// addBillToDB(ctx, &bill, logger)
 
 	// Set up handlers for signals
-	addLineItemChan := workflow.GetSignalChannel(ctx, "addLineItem")
-	removeLineItemChan := workflow.GetSignalChannel(ctx, "removeLineItem")
-	closeBillChan := workflow.GetSignalChannel(ctx, "closeBill")
+	addLineItemChan := workflow.GetSignalChannel(ctx, AddLineItemRoute.Name)
+	removeLineItemChan := workflow.GetSignalChannel(ctx, RemoveLineItemRoute.Name)
+	closeBillChan := workflow.GetSignalChannel(ctx, CloseBillRoute.Name)
 	selector := workflow.NewSelector(ctx)
 
 	registerSignalHandlers(

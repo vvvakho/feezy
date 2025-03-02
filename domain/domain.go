@@ -49,6 +49,23 @@ var ExchangeRates = map[string]float64{
 	"GEL": 275, // 275 tetri per 100 cents
 }
 
+func NewBill(userID string, currency string) (Bill, error) {
+	billID, err := uuid.NewV7()
+	if err != nil {
+		return Bill{}, fmt.Errorf("Unable to initialize bill ID: %v", err)
+	}
+
+	return Bill{
+		ID:        billID,
+		UserID:    userID,
+		Items:     []Item{},
+		Total:     Money{Amount: 0, Currency: currency},
+		Status:    BillOpen,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}, nil
+}
+
 func IsValidCurrency(c string) (bool, error) {
 	_, ok := ValidCurrency[c]
 	if !ok {
