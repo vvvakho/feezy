@@ -5,9 +5,9 @@ import (
 	"go.temporal.io/sdk/workflow"
 )
 
-func BillWorkflow(ctx workflow.Context, bill domain.Bill) error {
+func BillWorkflow(ctx workflow.Context, bill *domain.Bill) error {
 	// Initiate workflow with context, logger, error channel
-	ctx, logger, errCh, err := initWorkflow(ctx, &bill)
+	ctx, logger, err := initWorkflow(ctx, bill)
 	if err != nil {
 		return err //TODO: fatal
 	}
@@ -27,11 +27,9 @@ func BillWorkflow(ctx workflow.Context, bill domain.Bill) error {
 		addLineItemChan,
 		removeLineItemChan,
 		closeBillChan,
-		&bill,
+		bill,
 		logger,
 	)
-
-	registerErrorHandler(ctx, selector, errCh, logger)
 
 	// Start listening for events
 	for {

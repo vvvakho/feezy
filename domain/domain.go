@@ -49,13 +49,13 @@ var ExchangeRates = map[string]float64{
 	"GEL": 275, // 275 tetri per 100 cents
 }
 
-func NewBill(userID string, currency string) (Bill, error) {
+func NewBill(userID string, currency string) (*Bill, error) {
 	billID, err := uuid.NewV7()
 	if err != nil {
-		return Bill{}, fmt.Errorf("Unable to initialize bill ID: %v", err)
+		return &Bill{}, fmt.Errorf("Unable to initialize bill ID: %v", err)
 	}
 
-	return Bill{
+	return &Bill{
 		ID:        billID,
 		UserID:    userID,
 		Items:     []Item{},
@@ -75,20 +75,19 @@ func IsValidCurrency(c string) (bool, error) {
 }
 
 func convert(toCurrency string, fromCurrency string, amount minorUnit) (minorUnit, error) {
-	// (usd, gel, 275)
 	if toCurrency == fromCurrency {
 		return amount, nil
 	}
 
 	// Check if exchange rates exist
-	fromRate, fromExists := ExchangeRates[fromCurrency] // 2.75
-	toRate, toExists := ExchangeRates[toCurrency]       // 1.0
+	fromRate, fromExists := ExchangeRates[fromCurrency]
+	toRate, toExists := ExchangeRates[toCurrency]
 	if !fromExists || !toExists {
 		return 0, fmt.Errorf("exchange rate not defined for %s or %s", fromCurrency, toCurrency)
 	}
 
 	// Convert amount to target currency
-	convertedAmount := (amount * minorUnit(toRate)) / minorUnit(fromRate) // (275 / 2.75) * 1
+	convertedAmount := (amount * minorUnit(toRate)) / minorUnit(fromRate)
 	return convertedAmount, nil
 }
 
@@ -128,16 +127,16 @@ func (b *Bill) RemoveLineItem(itemToRemove Item) error {
 func (b *Bill) CalculateTotal() error {
 	var total minorUnit
 	for _, v := range b.Items {
-		amount := v.PricePerUnit.Amount         // 275 gel
-		fromCurrency := v.PricePerUnit.Currency // gel
-		toCurrency := b.Total.Currency          // usd
+		amount := v.PricePerUnit.Amount
+		fromCurrency := v.PricePerUnit.Currency
+		toCurrency := b.Total.Currency
 
-		unitPrice, err := convert(toCurrency, fromCurrency, amount) // 100
+		unitPrice, err := convert(toCurrency, fromCurrency, amount)
 		if err != nil {
 			return err
 		}
 
-		total += unitPrice * minorUnit(v.Quantity) // 100 * 1
+		total += unitPrice * minorUnit(v.Quantity)
 	}
 	b.Total.Amount = total
 

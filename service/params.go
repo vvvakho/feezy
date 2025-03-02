@@ -34,7 +34,7 @@ func validateCreateBillRequest(req *CreateBillRequest) error {
 }
 
 type GetBillRequest struct {
-	ID string `json:"user_id"`
+	ID string `json:"id"`
 }
 
 type GetBillResponse struct {
@@ -42,20 +42,20 @@ type GetBillResponse struct {
 	Items     []domain.Item `json:"items"`
 	Total     domain.Money  `json:"total"`
 	Status    domain.Status `json:"status"`
-	UserID    string        `json:"userId"`
-	CreatedAt time.Time     `json:"createdAt"`
-	UpdatedAt time.Time     `json:"updatedAt"`
+	UserID    string        `json:"user_id"`
+	CreatedAt time.Time     `json:"created_at"`
+	UpdatedAt time.Time     `json:"updated_at"`
 }
 
 type AddLineItemRequest struct {
-	ID           string
-	Quantity     int64
-	Description  string
-	PricePerUnit domain.Money
+	ID           string       `json:"id"`
+	Quantity     int64        `json:"quantity"`
+	Description  string       `json:"description"`
+	PricePerUnit domain.Money `json:"price_per_unit"`
 }
 
 type AddLineItemResponse struct {
-	Message string
+	Message string `json:"message"`
 }
 
 func validateAddLineItemRequest(req *AddLineItemRequest) error {
@@ -63,12 +63,11 @@ func validateAddLineItemRequest(req *AddLineItemRequest) error {
 	if err != nil {
 		return fmt.Errorf("Invalid ID: %v", err)
 	}
-	if err := validateAddLineItemRequest(req); err != nil {
-		return fmt.Errorf("Invalid request parameters: %v", err)
-	}
+
 	if req.Quantity < 1 {
 		return fmt.Errorf("Invalid item quantity: %v", req.Quantity)
 	}
+
 	_, err = domain.IsValidCurrency(req.PricePerUnit.Currency)
 	if err != nil {
 		return fmt.Errorf("Invalid currency %v", err)
@@ -78,10 +77,10 @@ func validateAddLineItemRequest(req *AddLineItemRequest) error {
 }
 
 type RemoveLineItemRequest struct {
-	ID           string
-	Quantity     int64
-	Description  string
-	PricePerUnit domain.Money
+	ID           string       `json:"id"`
+	Quantity     int64        `json:"quantity"`
+	Description  string       `json:"description"`
+	PricePerUnit domain.Money `json:"price_per_unit"`
 }
 
 type RemoveLineItemResponse struct {
@@ -93,15 +92,26 @@ func validateRemoveLineItemRequest(req *RemoveLineItemRequest) error {
 	if err != nil {
 		return fmt.Errorf("Invalid item ID: %v", err)
 	}
-
 	return nil
 }
 
 type CloseBillRequest struct {
-	ID        string `json:"user_id"`
 	RequestID string `json:"request_id"`
 }
 
 type CloseBillResponse struct {
 	Status string
+}
+
+func validateCloseBillRequest(id string, req *CloseBillRequest) error {
+	_, err := uuid.Parse(id)
+	if err != nil {
+		return fmt.Errorf("Invalid ID: %v", err)
+	}
+
+	if req.RequestID == "" {
+		req.RequestID = uuid.NewString()
+	}
+
+	return nil
 }

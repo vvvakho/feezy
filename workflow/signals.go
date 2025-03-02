@@ -11,9 +11,8 @@ import (
 	"go.temporal.io/sdk/workflow"
 )
 
-func initWorkflow(ctx workflow.Context, bill *domain.Bill) (workflow.Context, log.Logger, workflow.Channel, error) {
+func initWorkflow(ctx workflow.Context, bill *domain.Bill) (workflow.Context, log.Logger, error) {
 	logger := workflow.GetLogger(ctx)
-	errCh := workflow.NewChannel(ctx)
 
 	bill.CreatedAt = time.Now()
 	bill.UpdatedAt = time.Now()
@@ -22,7 +21,7 @@ func initWorkflow(ctx workflow.Context, bill *domain.Bill) (workflow.Context, lo
 	if err := workflow.SetQueryHandler(ctx, "getBill", func(input []byte) (*domain.Bill, error) {
 		return bill, nil
 	}); err != nil {
-		return nil, nil, nil, fmt.Errorf("SetQueryHandler failed: %v", err) //TODO: double check when to fatal vs log
+		return nil, nil, fmt.Errorf("SetQueryHandler failed: %v", err) //TODO: double check when to fatal vs log
 	}
 
 	ao := workflow.ActivityOptions{
@@ -35,7 +34,7 @@ func initWorkflow(ctx workflow.Context, bill *domain.Bill) (workflow.Context, lo
 	}
 	ctx = workflow.WithActivityOptions(ctx, ao)
 
-	return ctx, logger, errCh, nil
+	return ctx, logger, nil
 }
 
 func registerSignalHandlers(
@@ -48,44 +47,28 @@ func registerSignalHandlers(
 
 	// Register a handler to add line item
 	selector.AddReceive(addLineItemChan, func(c workflow.ReceiveChannel, _ bool) {
-		if err := handleAddLineItemSignal(ctx, c, bill, logger); err != nil {
-			logger.Error("Error adding item to bill", "Error", err)
+		if err := handleAddLineItemSignal(ctx, c, bill); err != nil {
+			logger.Error("Adding item to bill", "Error", err)
 		}
 	})
 
 	// Register a handler to remove line item
 	selector.AddReceive(removeLineItemChan, func(c workflow.ReceiveChannel, _ bool) {
-		if err := handleRemoveLineItemSignal(ctx, c, bill, logger); err != nil {
-			logger.Error("Error removing item from bill", "Error", err)
+		if err := handleRemoveLineItemSignal(ctx, c, bill); err != nil {
+			logger.Error("Removing item from bill", "Error", err)
 		}
 	})
 
 	// Register a handler to close bill
 	selector.AddReceive(closeBillChan, func(c workflow.ReceiveChannel, _ bool) {
 		if err := handleCloseBillSignal(ctx, c, bill, logger); err != nil {
-			logger.Error("Error closing bill", "Error", err)
+			logger.Error("Closing bill", "Error", err)
 		}
 	})
 
 }
 
-func registerErrorHandler(
-	ctx workflow.Context,
-	selector workflow.Selector,
-	errorChannel workflow.Channel,
-	logger log.Logger,
-) {
-	// Register a handler to catch asynch errors
-	selector.AddReceive(errorChannel, func(c workflow.ReceiveChannel, _ bool) {
-		var err error
-		c.Receive(ctx, &err)
-		if err != nil {
-			logger.Error("Asynchronous operation error", "Error", err)
-		}
-	})
-}
-
-func handleAddLineItemSignal(ctx workflow.Context, c workflow.ReceiveChannel, bill *domain.Bill, logger log.Logger) error {
+func handleAddLineItemSignal(ctx workflow.Context, c workflow.ReceiveChannel, bill *domain.Bill) error {
 	var addSignal AddItemSignal
 	c.Receive(ctx, &addSignal)
 
@@ -106,7 +89,7 @@ func handleAddLineItemSignal(ctx workflow.Context, c workflow.ReceiveChannel, bi
 	return nil
 }
 
-func handleRemoveLineItemSignal(ctx workflow.Context, c workflow.ReceiveChannel, bill *domain.Bill, logger log.Logger) error {
+func handleRemoveLineItemSignal(ctx workflow.Context, c workflow.ReceiveChannel, bill *domain.Bill) error {
 	var removeSignal RemoveItemSignal
 	c.Receive(ctx, &removeSignal)
 
