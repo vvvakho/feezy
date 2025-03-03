@@ -2,6 +2,7 @@ package workflow
 
 import (
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/vvvakho/feezy/domain"
@@ -71,6 +72,10 @@ func registerSignalHandlers(
 }
 
 func handleAddLineItemSignal(ctx workflow.Context, c workflow.ReceiveChannel, bill *domain.Bill) error {
+	if bill.Status != domain.BillOpen {
+		return fmt.Errorf("Bill is no longer open")
+	}
+
 	var addSignal AddItemSignal
 	c.Receive(ctx, &addSignal)
 
@@ -85,13 +90,14 @@ func handleAddLineItemSignal(ctx workflow.Context, c workflow.ReceiveChannel, bi
 
 	bill.UpdatedAt = time.Now()
 
-	// Update bill total in DB asynchronously
-	// addBillToDB(ctx, bill, logger)
-
 	return nil
 }
 
 func handleRemoveLineItemSignal(ctx workflow.Context, c workflow.ReceiveChannel, bill *domain.Bill) error {
+	if bill.Status != domain.BillOpen {
+		return fmt.Errorf("Bill is no longer open")
+	}
+
 	var removeSignal RemoveItemSignal
 	c.Receive(ctx, &removeSignal)
 
@@ -106,38 +112,62 @@ func handleRemoveLineItemSignal(ctx workflow.Context, c workflow.ReceiveChannel,
 
 	bill.UpdatedAt = time.Now()
 
-	// Update bill total in DB asynchronously
-	// addBillToDB(ctx, bill, logger)
 	return nil
 }
 
 func handleCloseBillSignal(ctx workflow.Context, c workflow.ReceiveChannel, bill *domain.Bill, logger log.Logger) error {
 	for {
+		// If the bill is already closed, ignore further signals
+		if bill.Status == domain.BillClosed {
+			logger.Warn("Received close bill signal, but bill is already closed", "BillID", bill.ID)
+			return fmt.Errorf("Bill already closed")
+		}
+
+		bill.Status = domain.BillClosing
+		bill.UpdatedAt = time.Now()
+
 		var closeSignal CloseBillSignal
 		c.Receive(ctx, &closeSignal)
 
 		if err := bill.CalculateTotal(); err != nil {
 			logger.Error("Error calculating bill total", "Error", err)
-			continue // Keep waiting for a valid signal
+			bill.Status = domain.BillOpen
+			return fmt.Errorf("Error closing bill: %v", err)
 		}
 
-		bill.Status = domain.BillClosing
+		// Set retry policy for transient failures (e.g., network issues)
+		retryPolicy := &temporal.RetryPolicy{
+			InitialInterval:    time.Second * 2,
+			BackoffCoefficient: 2.0,
+			MaximumInterval:    time.Minute,
+			MaximumAttempts:    5,
+		}
+		activityOptions := workflow.ActivityOptions{
+			StartToCloseTimeout: time.Minute,
+			RetryPolicy:         retryPolicy,
+		}
+		ctx = workflow.WithActivityOptions(ctx, activityOptions)
 
-		// Execute activity with retry logic
+		// Execute AddClosedBillToDB activity
 		err := workflow.ExecuteActivity(ctx, AddClosedBillToDB, bill, closeSignal.RequestID).Get(ctx, nil)
 		if err != nil {
 			var appErr *temporal.ApplicationError
-			if errors.As(err, &appErr) && appErr.Type() == "DuplicateRequestError" {
-				logger.Warn("Duplicate request detected, waiting for new request")
-				continue // Keep waiting for a correct request ID
+			if errors.As(err, &appErr) {
+				if appErr.Type() == "DuplicateRequestError" {
+					logger.Warn("Duplicate close request detected, ignoring", "RequestID", closeSignal.RequestID)
+					return nil
+				} else if appErr.Type() == "UserInputError" {
+					logger.Error("Invalid input, rejecting close request", "Error", appErr)
+					bill.Status = domain.BillOpen // Reset to open state
+					return err
+				}
 			}
 			logger.Error("Error executing AddClosedBillToDB activity", "Error", err)
-			return err // For other errors, fail the workflow
+			return err // Fail workflow for other errors
 		}
 
 		// Successfully closed the bill, exit loop
 		bill.Status = domain.BillClosed
-		bill.UpdatedAt = time.Now()
 
 		logger.Info("Bill successfully saved as closed in DB", "BillID", bill.ID)
 		break

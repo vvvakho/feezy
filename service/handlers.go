@@ -45,14 +45,14 @@ func (s *Service) CreateBill(ctx context.Context, req *CreateBillRequest) (*Crea
 //
 //encore:api public method=GET path=/bills/:id
 func (s *Service) GetBill(ctx context.Context, id string) (*GetBillResponse, error) {
-	// Step 1: Check if bill exists in open_bills DB
+	// Check if bill exists in open_bills DB
 	_, err := s.GetOpenBillFromDB(ctx, id)
 	if err == nil {
-		// Step 2: Check if the workflow is running (only if bill is open)
+		// Check if the workflow is running (only if bill is open)
 		if err := isWorkflowRunning(s.TemporalClient, id); err == nil {
 			var bill domain.Bill
 
-			// Step 3: Query Temporal Workflow for Bill Details
+			// Query Temporal Workflow for Bill Details
 			if err := getBillQuery(ctx, s.TemporalClient, id, &bill); err != nil {
 				return nil, fmt.Errorf("Unable to query bill from Temporal: %v", err)
 			}
@@ -69,7 +69,7 @@ func (s *Service) GetBill(ctx context.Context, id string) (*GetBillResponse, err
 		}
 	}
 
-	// Step 4: If bill is not in open_bills, check closed_bills DB
+	// If bill is not in open_bills, check closed_bills DB
 	closedBill, err := s.GetClosedBillFromDB(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("Bill not found: %v", err)
@@ -96,9 +96,15 @@ func (s *Service) AddLineItemToBill(ctx context.Context, id string, req *AddLine
 		return &AddLineItemResponse{}, fmt.Errorf("Invalid request: %v", err)
 	}
 
-	if err := isWorkflowRunning(s.TemporalClient, id); err != nil {
+	// Check if bill exists in open_bills DB
+	_, err := s.GetOpenBillFromDB(ctx, id)
+	if err != nil {
 		return nil, fmt.Errorf("Bill not found or already closed: %v", err)
 	}
+
+	// if err := isWorkflowRunning(s.TemporalClient, id); err != nil {
+	// 	return nil, fmt.Errorf("Bill not found or already closed: %v", err)
+	// }
 
 	itemID, err := uuid.Parse(req.ID)
 	if err != nil {
@@ -132,9 +138,15 @@ func (s *Service) RemoveLineItemFromBill(ctx context.Context, id string, req *Re
 		return &RemoveLineItemResponse{}, fmt.Errorf("Invalid request: %v", err)
 	}
 
-	if err := isWorkflowRunning(s.TemporalClient, id); err != nil {
+	// Check if bill exists in open_bills DB
+	_, err := s.GetOpenBillFromDB(ctx, id)
+	if err != nil {
 		return nil, fmt.Errorf("Bill not found or already closed: %v", err)
 	}
+
+	// if err := isWorkflowRunning(s.TemporalClient, id); err != nil {
+	// 	return nil, fmt.Errorf("Bill not found or already closed: %v", err)
+	// }
 
 	itemID, err := uuid.Parse(req.ID)
 	if err != nil {
@@ -162,18 +174,22 @@ func (s *Service) RemoveLineItemFromBill(ctx context.Context, id string, req *Re
 //
 //encore:api public method=POST path=/bills/:id
 func (s *Service) CloseBill(ctx context.Context, id string, req *CloseBillRequest) (*CloseBillResponse, error) {
-	//TODO: check if bill active
-
 	if err := validateCloseBillRequest(id, req); err != nil {
 		return &CloseBillResponse{}, fmt.Errorf("Invalid request parameters: %v", err)
 	}
 
-	// Check if workflow is running
-	if err := isWorkflowRunning(s.TemporalClient, id); err != nil {
+	// Check if bill exists in open_bills DB
+	_, err := s.GetOpenBillFromDB(ctx, id)
+	if err != nil {
 		return nil, fmt.Errorf("Bill not found or already closed: %v", err)
 	}
 
-	err := closeBillSignal(ctx, s.TemporalClient, id, &workflow.CloseBillSignal{RequestID: req.RequestID})
+	// // Check if workflow is running
+	// if err := isWorkflowRunning(s.TemporalClient, id); err != nil {
+	// 	return nil, fmt.Errorf("Bill not found or already closed: %v", err)
+	// }
+
+	err = closeBillSignal(ctx, s.TemporalClient, id, &workflow.CloseBillSignal{RequestID: req.RequestID})
 	if err != nil {
 		return nil, fmt.Errorf("Error signaling CloseBill task: %v", err)
 	}

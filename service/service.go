@@ -13,7 +13,7 @@ import (
 //encore:service
 type Service struct {
 	TemporalClient client.Client
-	DB             *sqldb.Database
+	DBencore       *sqldb.Database
 }
 
 var BillsDB = sqldb.NewDatabase("bills", sqldb.DatabaseConfig{
@@ -29,7 +29,7 @@ func initService() (*Service, error) {
 
 	return &Service{
 		TemporalClient: c,
-		DB:             BillsDB,
+		DBencore:       BillsDB,
 	}, nil
 }
 

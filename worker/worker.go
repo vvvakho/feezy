@@ -14,13 +14,13 @@ func main() {
 	// Connect to Temporal
 	c, err := client.Dial(client.Options{})
 	if err != nil {
-		log.Fatalf("Failed to connect to Temporal: %v", err) //TODO: fatal
+		log.Fatalf("Failed to connect to Temporal: %v", err)
 	}
 
 	// Create a worker pool for delegating tasks
 	w := worker.New(c, "create-bill-queue", worker.Options{})
 
-	// Manually establishing connection lets us decouple from Encore
+	// Establishing a separate DB connection lets us decouple from Encore
 	// in case we want to introduce independent horizontal worker scaling
 	postgres, err := sql.Open("postgres", "postgresql://feezy-zyei:local@127.0.0.1:9500/bills?sslmode=disable") //TODO: conn string from conf
 	if err != nil {
@@ -28,12 +28,12 @@ func main() {
 	}
 	defer postgres.Close()
 
-	dbRepo := workflow.WorkerDB{
-		DB: postgres,
+	db := workflow.DB{
+		DBworker: postgres,
 	}
 
 	activities := &workflow.Activities{
-		Repository: &dbRepo,
+		Repository: &db,
 	}
 
 	// Register Workflow and Activities

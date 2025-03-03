@@ -15,7 +15,7 @@ func (s *Service) GetOpenBillFromDB(ctx context.Context, id string) (*domain.Bil
 		WHERE id = $1;
 	`
 	var bill domain.Bill
-	row := s.DB.QueryRow(ctx, query, id)
+	row := s.DBencore.QueryRow(ctx, query, id)
 
 	err := row.Scan(
 		&bill.ID,
@@ -44,7 +44,7 @@ func (s *Service) GetClosedBillFromDB(ctx context.Context, id string) (*domain.B
 	`
 
 	var bill domain.Bill
-	row := s.DB.QueryRow(ctx, query, id)
+	row := s.DBencore.QueryRow(ctx, query, id)
 
 	err := row.Scan(
 		&bill.ID,
