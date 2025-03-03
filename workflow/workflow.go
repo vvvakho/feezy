@@ -10,18 +10,18 @@ import (
 	"go.temporal.io/sdk/workflow"
 )
 
-func BillWorkflow(ctx workflow.Context, bill *domain.Bill) error {
+func BillWorkflow(ctx workflow.Context, bill *domain.Bill) (*domain.Bill, error) {
 	// Initiate workflow with context, logger, error channel
 	ctx, logger, err := initWorkflow(ctx, bill)
 	if err != nil {
-		return err //TODO: fatal
+		return bill, err //TODO: fatal
 	}
 
 	// Asynchronously add bill to `open_bills` DB
 	requestID := uuid.NewString()
 	err = workflow.ExecuteActivity(ctx, AddOpenBillToDB, bill, requestID).Get(ctx, nil)
 	if err != nil {
-		return err
+		return bill, err
 	}
 
 	// Set up handlers for signals
@@ -51,7 +51,7 @@ func BillWorkflow(ctx workflow.Context, bill *domain.Bill) error {
 		}
 	}
 
-	return nil
+	return bill, nil
 }
 
 func initWorkflow(ctx workflow.Context, bill *domain.Bill) (workflow.Context, log.Logger, error) {

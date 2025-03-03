@@ -80,7 +80,7 @@ func IsValidCurrency(c string) (bool, error) {
 	return true, nil
 }
 
-func convert(toCurrency string, fromCurrency string, amount MinorUnit) (MinorUnit, error) {
+func Convert(toCurrency string, fromCurrency string, amount MinorUnit) (MinorUnit, error) {
 	if toCurrency == fromCurrency {
 		return amount, nil
 	}
@@ -105,12 +105,19 @@ func (b *Bill) AddLineItem(itemToAdd Item) error {
 			}
 
 			b.Items[i].Quantity += itemToAdd.Quantity
+			if err := b.CalculateTotal(); err != nil {
+				return err
+			}
+
 			return nil
 		}
 	}
 	b.Items = append(b.Items, itemToAdd)
 
-	_ = b.CalculateTotal()
+	if err := b.CalculateTotal(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -128,7 +135,10 @@ func (b *Bill) RemoveLineItem(itemToRemove Item) error {
 		}
 	}
 
-	_ = b.CalculateTotal()
+	if err := b.CalculateTotal(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -139,7 +149,7 @@ func (b *Bill) CalculateTotal() error {
 		fromCurrency := v.PricePerUnit.Currency
 		toCurrency := b.Total.Currency
 
-		unitPrice, err := convert(toCurrency, fromCurrency, amount)
+		unitPrice, err := Convert(toCurrency, fromCurrency, amount)
 		if err != nil {
 			return err
 		}

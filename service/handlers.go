@@ -50,9 +50,8 @@ func (s *Service) GetBill(ctx context.Context, id string) (*GetBillResponse, err
 	if err == nil {
 		// Check if the workflow is running (only if bill is open)
 		if err := isWorkflowRunning(s.TemporalClient, id); err == nil {
-			var bill domain.Bill
-
 			// Query Temporal Workflow for Bill Details
+			var bill domain.Bill
 			if err := getBillQuery(ctx, s.TemporalClient, id, &bill); err != nil {
 				return nil, fmt.Errorf("Unable to query bill from Temporal: %v", err)
 			}
