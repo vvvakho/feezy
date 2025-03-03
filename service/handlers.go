@@ -74,9 +74,14 @@ func (s *Service) GetBill(ctx context.Context, id string) (*GetBillResponse, err
 		return nil, fmt.Errorf("Bill not found: %v", err)
 	}
 
+	closedBillItems, err := s.GetClosedBillItemsFromDB(ctx, id)
+	if err != nil {
+		return nil, fmt.Errorf("Bill items not found: %v", err)
+	}
+
 	return &GetBillResponse{
 		ID:        closedBill.ID.String(),
-		Items:     nil, // TODO: implement table for items detail
+		Items:     closedBillItems,
 		Total:     closedBill.Total,
 		Status:    closedBill.Status,
 		UserID:    closedBill.UserID.String(),
@@ -193,5 +198,6 @@ func (s *Service) CloseBill(ctx context.Context, id string, req *CloseBillReques
 		return nil, fmt.Errorf("Error signaling CloseBill task: %v", err)
 	}
 
-	return &CloseBillResponse{Status: "Request has been sent"}, nil //TODO: appropriate response?
+	return &CloseBillResponse{Status: "Request has been sent"}, nil
+	//TODO: need to think about synch vs asynch approach here, perhaps better use update?
 }

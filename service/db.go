@@ -65,3 +65,52 @@ func (s *Service) GetClosedBillFromDB(ctx context.Context, id string) (*domain.B
 
 	return &bill, nil
 }
+
+func (s *Service) GetClosedBillItemsFromDB(ctx context.Context, billID string) ([]domain.Item, error) {
+	// Validate the billID
+	if billID == "" {
+		return nil, fmt.Errorf("billID cannot be empty")
+	}
+
+	// Query the database for items associated with the given billID
+	rows, err := s.DBencore.Query(ctx, `
+		SELECT item_id, description, quantity, unit_price, currency
+		FROM closed_bills_items
+		WHERE bill_id = $1
+	`, billID)
+	if err != nil {
+		return nil, fmt.Errorf("error querying closed_bills_items: %v", err)
+	}
+	defer rows.Close()
+
+	// Iterate through the rows and populate the items slice
+	var items []domain.Item
+	for rows.Next() {
+		var item domain.Item
+		var pricePerUnit domain.Money
+
+		err := rows.Scan(
+			&item.ID,
+			&item.Description,
+			&item.Quantity,
+			&pricePerUnit.Amount,
+			&pricePerUnit.Currency,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("error scanning row: %v", err)
+		}
+
+		// Assign the pricePerUnit to the item
+		item.PricePerUnit = pricePerUnit
+
+		// Append the item to the items slice
+		items = append(items, item)
+	}
+
+	// Check for errors during iteration
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating rows: %v", err)
+	}
+
+	return items, nil
+}

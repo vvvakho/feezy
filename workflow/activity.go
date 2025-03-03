@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/vvvakho/feezy/domain"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
@@ -87,26 +88,25 @@ func (db *DB) AddOpenBillToDB(ctx context.Context, bill *domain.Bill, requestID 
 }
 
 func (db *DB) AddClosedBillToDB(ctx context.Context, bill *domain.Bill, requestID *string) error {
-	tx, err := db.DBworker.Begin()
+	// Validate requestID before initiating transaction
+	if requestID == nil {
+		return temporal.NewNonRetryableApplicationError("requestID cannot be nil", "InvalidRequestError", nil)
+	}
+
+	tx, err := db.DBworker.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("Error starting transaction: %v", err)
 	}
+	defer tx.Rollback()
 
-	// Check if the bill is already closed with this requestID
-	var existingRequestID *string
-	err = tx.QueryRow("SELECT request_id FROM closed_bills WHERE id = $1", bill.ID).Scan(&existingRequestID)
-	if err == nil && existingRequestID != nil && *existingRequestID == *requestID {
-		tx.Rollback()
-		return temporal.NewNonRetryableApplicationError("Duplicate request", "DuplicateRequestError", nil)
-	}
-
-	_, err = tx.Exec(`
+	// Attempt to move the bill from Temporal Workflow into the closed_bills table in database
+	res, err := tx.ExecContext(ctx, `
 		INSERT INTO closed_bills (id, user_id, status, total_amount, currency, created_at, updated_at, closed_at, request_id)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		ON CONFLICT (id) 
 		DO UPDATE SET 
-			status = CASE WHEN closed_bills.status <> EXCLUDED.status THEN EXCLUDED.status ELSE closed_bills.status END,
-			total_amount = CASE WHEN closed_bills.total_amount <> EXCLUDED.total_amount THEN EXCLUDED.total_amount ELSE closed_bills.total_amount END,
+			status = EXCLUDED.status,
+			total_amount = EXCLUDED.total_amount,
 			updated_at = now()
 		WHERE closed_bills.request_id IS DISTINCT FROM EXCLUDED.request_id;
 	`,
@@ -118,11 +118,10 @@ func (db *DB) AddClosedBillToDB(ctx context.Context, bill *domain.Bill, requestI
 		bill.CreatedAt,
 		time.Now(),
 		time.Now(),
-		requestID,
+		*requestID,
 	)
 
 	if err != nil {
-		tx.Rollback()
 		if isUserInputError(err) {
 			// Mark this error as non-retryable for Temporal
 			return temporal.NewNonRetryableApplicationError("Invalid input error", "UserInputError", err)
@@ -130,13 +129,63 @@ func (db *DB) AddClosedBillToDB(ctx context.Context, bill *domain.Bill, requestI
 		return fmt.Errorf("Error inserting/updating db: %v", err)
 	}
 
-	// Remove from Open Bills Database
-	_, err = tx.Exec(`DELETE FROM open_bills WHERE id = $1`, bill.ID)
+	rowsAffected, err := res.RowsAffected()
 	if err != nil {
-		tx.Rollback()
+		return fmt.Errorf("error checking rows affected: %v", err)
+	}
+
+	// If no rows affected, check if the existing request_id matches
+	if rowsAffected == 0 {
+		var existingRequestID string
+		err := tx.QueryRowContext(ctx, "SELECT request_id FROM closed_bills WHERE id = $1", bill.ID).Scan(&existingRequestID)
+		if err != nil {
+			return fmt.Errorf("error checking existing request_id: %v", err)
+		}
+
+		if existingRequestID == *requestID {
+			// Idempotent request: already processed successfully
+			return tx.Commit() // Commit to signal successful idempotent operation
+		} else {
+			// Bill closed with a different requestID: non-retryable error
+			return temporal.NewNonRetryableApplicationError(
+				"bill already closed with a different request",
+				"BillAlreadyClosedError",
+				nil,
+			)
+		}
+	}
+
+	// Attempt to move the bill items from Temporal Workflow into the closed_bills_items table in database
+	for _, item := range bill.Items {
+		_, err = tx.ExecContext(ctx,
+			`INSERT INTO closed_bills_items (id, bill_id, item_id, description, quantity, unit_price, currency)
+			VALUES ($1, $2, $3, $4, $5, $6, $7)
+			ON CONFLICT (id) 
+			DO UPDATE SET 
+				description = EXCLUDED.description,
+				quantity = EXCLUDED.quantity,
+				unit_price = EXCLUDED.unit_price,
+				currency = EXCLUDED.currency;`,
+			uuid.New(),
+			bill.ID,
+			item.ID,
+			item.Description,
+			item.Quantity,
+			item.PricePerUnit.Amount,
+			item.PricePerUnit.Currency,
+		)
+		if err != nil {
+			return fmt.Errorf("Error inserting/updating closed_bills_items: %v", err)
+		}
+	}
+
+	// Attempt to remove bill from Open Bills Database
+	_, err = tx.ExecContext(ctx, `DELETE FROM open_bills WHERE id = $1`, bill.ID)
+	if err != nil {
 		return fmt.Errorf("Failed to remove from open_bills: %v", err)
 	}
 
+	// Commit the transaction
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("Error committing transaction: %v", err)
 	}
