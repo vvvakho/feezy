@@ -84,6 +84,10 @@ func HandleAddLineItemSignal(ctx workflow.Context, c workflow.ReceiveChannel, bi
 		return err
 	}
 
+	if err := bill.CalculateTotal(); err != nil {
+		return err
+	}
+
 	bill.UpdatedAt = time.Now()
 
 	return nil
