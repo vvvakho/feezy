@@ -32,7 +32,7 @@ func (s *Service) CreateBill(ctx context.Context, req *CreateBillRequest) (*Crea
 
 	return &CreateBillResponse{
 		ID:        bill.ID.String(),
-		UserID:    bill.UserID,
+		UserID:    bill.UserID.String(),
 		Currency:  bill.Total.Currency,
 		CreatedAt: bill.CreatedAt,
 		Status:    string(bill.Status),
@@ -62,7 +62,7 @@ func (s *Service) GetBill(ctx context.Context, id string) (*GetBillResponse, err
 				Items:     bill.Items,
 				Total:     bill.Total,
 				Status:    bill.Status,
-				UserID:    bill.UserID,
+				UserID:    bill.UserID.String(),
 				CreatedAt: bill.CreatedAt,
 				UpdatedAt: bill.UpdatedAt,
 			}, nil
@@ -80,7 +80,7 @@ func (s *Service) GetBill(ctx context.Context, id string) (*GetBillResponse, err
 		Items:     nil, // TODO: implement table for items detail
 		Total:     closedBill.Total,
 		Status:    closedBill.Status,
-		UserID:    closedBill.UserID,
+		UserID:    closedBill.UserID.String(),
 		CreatedAt: closedBill.CreatedAt,
 		UpdatedAt: closedBill.UpdatedAt,
 	}, nil

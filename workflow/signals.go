@@ -50,28 +50,28 @@ func registerSignalHandlers(
 
 	// Register a handler to add line item
 	selector.AddReceive(addLineItemChan, func(c workflow.ReceiveChannel, _ bool) {
-		if err := handleAddLineItemSignal(ctx, c, bill); err != nil {
+		if err := HandleAddLineItemSignal(ctx, c, bill); err != nil {
 			logger.Error("Adding item to bill", "Error", err)
 		}
 	})
 
 	// Register a handler to remove line item
 	selector.AddReceive(removeLineItemChan, func(c workflow.ReceiveChannel, _ bool) {
-		if err := handleRemoveLineItemSignal(ctx, c, bill); err != nil {
+		if err := HandleRemoveLineItemSignal(ctx, c, bill); err != nil {
 			logger.Error("Removing item from bill", "Error", err)
 		}
 	})
 
 	// Register a handler to close bill
 	selector.AddReceive(closeBillChan, func(c workflow.ReceiveChannel, _ bool) {
-		if err := handleCloseBillSignal(ctx, c, bill, logger); err != nil {
+		if err := HandleCloseBillSignal(ctx, c, bill, logger); err != nil {
 			logger.Error("Closing bill", "Error", err)
 		}
 	})
 
 }
 
-func handleAddLineItemSignal(ctx workflow.Context, c workflow.ReceiveChannel, bill *domain.Bill) error {
+func HandleAddLineItemSignal(ctx workflow.Context, c workflow.ReceiveChannel, bill *domain.Bill) error {
 	if bill.Status != domain.BillOpen {
 		return fmt.Errorf("Bill is no longer open")
 	}
@@ -84,16 +84,12 @@ func handleAddLineItemSignal(ctx workflow.Context, c workflow.ReceiveChannel, bi
 		return err
 	}
 
-	if err := bill.CalculateTotal(); err != nil {
-		return err
-	}
-
 	bill.UpdatedAt = time.Now()
 
 	return nil
 }
 
-func handleRemoveLineItemSignal(ctx workflow.Context, c workflow.ReceiveChannel, bill *domain.Bill) error {
+func HandleRemoveLineItemSignal(ctx workflow.Context, c workflow.ReceiveChannel, bill *domain.Bill) error {
 	if bill.Status != domain.BillOpen {
 		return fmt.Errorf("Bill is no longer open")
 	}
@@ -106,16 +102,12 @@ func handleRemoveLineItemSignal(ctx workflow.Context, c workflow.ReceiveChannel,
 		return err
 	}
 
-	if err := bill.CalculateTotal(); err != nil {
-		return err
-	}
-
 	bill.UpdatedAt = time.Now()
 
 	return nil
 }
 
-func handleCloseBillSignal(ctx workflow.Context, c workflow.ReceiveChannel, bill *domain.Bill, logger log.Logger) error {
+func HandleCloseBillSignal(ctx workflow.Context, c workflow.ReceiveChannel, bill *domain.Bill, logger log.Logger) error {
 	for {
 		// If the bill is already closed, ignore further signals
 		if bill.Status == domain.BillClosed {

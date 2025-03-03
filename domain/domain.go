@@ -14,7 +14,7 @@ type Bill struct {
 	Items     []Item
 	Total     Money
 	Status    Status
-	UserID    string
+	UserID    uuid.UUID
 	CreatedAt time.Time
 	UpdatedAt time.Time
 	ClosedAt  time.Time
@@ -27,10 +27,10 @@ type Item struct {
 	PricePerUnit Money
 }
 
-type minorUnit int64
+type MinorUnit int64
 
 type Money struct {
-	Amount   minorUnit
+	Amount   MinorUnit
 	Currency string
 }
 
@@ -56,9 +56,14 @@ func NewBill(userID string, currency string) (*Bill, error) {
 		return &Bill{}, fmt.Errorf("Unable to initialize bill ID: %v", err)
 	}
 
+	parseID, err := uuid.Parse(userID)
+	if err != nil {
+		return &Bill{}, fmt.Errorf("Invalid UserID")
+	}
+
 	return &Bill{
 		ID:        billID,
-		UserID:    userID,
+		UserID:    parseID,
 		Items:     []Item{},
 		Total:     Money{Amount: 0, Currency: currency},
 		Status:    BillOpen,
@@ -75,7 +80,7 @@ func IsValidCurrency(c string) (bool, error) {
 	return true, nil
 }
 
-func convert(toCurrency string, fromCurrency string, amount minorUnit) (minorUnit, error) {
+func convert(toCurrency string, fromCurrency string, amount MinorUnit) (MinorUnit, error) {
 	if toCurrency == fromCurrency {
 		return amount, nil
 	}
@@ -88,7 +93,7 @@ func convert(toCurrency string, fromCurrency string, amount minorUnit) (minorUni
 	}
 
 	// Convert amount to target currency
-	convertedAmount := (amount * minorUnit(toRate)) / minorUnit(fromRate)
+	convertedAmount := (amount * MinorUnit(toRate)) / MinorUnit(fromRate)
 	return convertedAmount, nil
 }
 
@@ -105,6 +110,7 @@ func (b *Bill) AddLineItem(itemToAdd Item) error {
 	}
 	b.Items = append(b.Items, itemToAdd)
 
+	_ = b.CalculateTotal()
 	return nil
 }
 
@@ -122,11 +128,12 @@ func (b *Bill) RemoveLineItem(itemToRemove Item) error {
 		}
 	}
 
+	_ = b.CalculateTotal()
 	return nil
 }
 
 func (b *Bill) CalculateTotal() error {
-	var total minorUnit
+	var total MinorUnit
 	for _, v := range b.Items {
 		amount := v.PricePerUnit.Amount
 		fromCurrency := v.PricePerUnit.Currency
@@ -137,7 +144,7 @@ func (b *Bill) CalculateTotal() error {
 			return err
 		}
 
-		total += unitPrice * minorUnit(v.Quantity)
+		total += unitPrice * MinorUnit(v.Quantity)
 	}
 	b.Total.Amount = total
 
