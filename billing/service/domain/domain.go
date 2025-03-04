@@ -51,6 +51,10 @@ var ExchangeRates = map[string]float64{
 }
 
 func NewBill(userID string, currency string) (*Bill, error) {
+	if _, valid := ValidCurrency[currency]; !valid {
+		return nil, errors.New("invalid currency")
+	}
+
 	billID, err := uuid.NewV7()
 	if err != nil {
 		return &Bill{}, fmt.Errorf("Unable to initialize bill ID: %v", err)
@@ -98,6 +102,10 @@ func Convert(toCurrency string, fromCurrency string, amount MinorUnit) (MinorUni
 }
 
 func (b *Bill) AddLineItem(itemToAdd Item) error {
+	if b.Status == BillClosed {
+		return errors.New("cannot add item to a closed bill")
+	}
+
 	for i, itemInBill := range b.Items {
 		if itemInBill.ID == itemToAdd.ID {
 			if itemInBill.PricePerUnit != itemToAdd.PricePerUnit {
@@ -105,25 +113,20 @@ func (b *Bill) AddLineItem(itemToAdd Item) error {
 			}
 
 			b.Items[i].Quantity += itemToAdd.Quantity
-			if err := b.CalculateTotal(); err != nil {
-				return err
-			}
-
-			return nil
+			return b.CalculateTotal()
 		}
 	}
 	b.Items = append(b.Items, itemToAdd)
 
-	if err := b.CalculateTotal(); err != nil {
-		return err
-	}
-
-	return nil
+	return b.CalculateTotal()
 }
 
 func (b *Bill) RemoveLineItem(itemToRemove Item) error {
+	found := false
+
 	for i, itemInBill := range b.Items {
 		if itemInBill.ID == itemToRemove.ID {
+			found = true
 			if itemInBill.PricePerUnit != itemToRemove.PricePerUnit {
 				return errors.New("Price of item has changed, please use new UUID")
 			}
@@ -132,14 +135,15 @@ func (b *Bill) RemoveLineItem(itemToRemove Item) error {
 			if b.Items[i].Quantity <= 0 {
 				b.Items = slices.Delete(b.Items, i, i+1)
 			}
+			break
 		}
 	}
 
-	if err := b.CalculateTotal(); err != nil {
-		return err
+	if !found {
+		return fmt.Errorf("item not found in bill")
 	}
 
-	return nil
+	return b.CalculateTotal()
 }
 
 func (b *Bill) CalculateTotal() error {

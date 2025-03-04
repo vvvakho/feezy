@@ -10,9 +10,12 @@ import (
 	"go.temporal.io/sdk/client"
 )
 
+// Dependency injection -- primarily for mock testing
+var TemporalDial = client.Dial
+
 func InitTemporalClient() (client.Client, error) {
 	// Connect to Temporal
-	c, err := client.Dial(client.Options{})
+	c, err := TemporalDial(client.Options{})
 	if err != nil {
 		return nil, fmt.Errorf("Failed to connect to Temporal: %v", err)
 	}

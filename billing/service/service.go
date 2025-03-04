@@ -22,7 +22,7 @@ var BillsDB = sqldb.NewDatabase("bills", sqldb.DatabaseConfig{
 })
 
 func initService() (*Service, error) {
-	c, err := tc.InitTemporalClient()
+	tc, err := tc.InitTemporalClient()
 	if err != nil {
 		return &Service{}, fmt.Errorf("Unable to connect to Temporal: %v", err)
 	}
@@ -30,7 +30,7 @@ func initService() (*Service, error) {
 	db := &Repo{DB: BillsDB}
 
 	return &Service{
-		TemporalClient: c,
+		TemporalClient: tc,
 		Repository:     db,
 	}, nil
 }

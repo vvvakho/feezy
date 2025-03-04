@@ -17,7 +17,7 @@ func TestNewBill(t *testing.T) {
 	}{
 		{"Valid User and Currency", uuid.New().String(), "USD", false},
 		{"Invalid User ID", "invalid-uuid", "USD", true},
-		{"Invalid Currency", uuid.New().String(), "EUR", false},
+		{"Invalid Currency", uuid.New().String(), "EUR", true},
 	}
 
 	for _, tc := range tests {
@@ -41,6 +41,7 @@ func TestIsValidCurrency(t *testing.T) {
 		{"USD", false},
 		{"GEL", false},
 		{"EUR", true},
+		{"", true},
 	}
 
 	for _, tc := range tests {
@@ -69,6 +70,7 @@ func TestConvert(t *testing.T) {
 		{"GEL", "USD", 275, false, 100},
 		{"USD", "USD", 100, false, 100},
 		{"USD", "EUR", 100, true, 0},
+		{"", "USD", 100, true, 0},
 	}
 
 	for _, tc := range tests {
@@ -86,13 +88,14 @@ func TestConvert(t *testing.T) {
 
 func TestAddLineItem(t *testing.T) {
 	bill, _ := NewBill(uuid.New().String(), "USD")
+	bill.Status = BillClosed // Testing adding to a closed bill
 	tests := []struct {
 		name        string
 		item        Item
 		expectTotal MinorUnit
 		expectErr   bool
 	}{
-		{"Add New Item", Item{ID: uuid.New(), Quantity: 2, Description: "Item 1", PricePerUnit: Money{Amount: 50, Currency: "USD"}}, 100, false},
+		{"Add New Item", Item{ID: uuid.New(), Quantity: 2, Description: "Item 1", PricePerUnit: Money{Amount: 50, Currency: "USD"}}, 0, true},
 	}
 
 	for _, tc := range tests {
@@ -120,15 +123,20 @@ func TestRemoveLineItem(t *testing.T) {
 		expectTotal MinorUnit
 		expectErr   bool
 	}{
-		{"Remove One Quantity", Item{ID: item.ID, Quantity: 1, PricePerUnit: item.PricePerUnit}, 50, false},
+		{"Remove Non-Existent Item", Item{ID: uuid.New(), Quantity: 1, PricePerUnit: Money{Amount: 50, Currency: "USD"}}, 100, true},
+		{"Remove Partial Quantity", Item{ID: item.ID, Quantity: 1, PricePerUnit: item.PricePerUnit}, 50, false},
 		{"Remove Remaining Quantity", Item{ID: item.ID, Quantity: 1, PricePerUnit: item.PricePerUnit}, 0, false},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			err := bill.RemoveLineItem(tc.removeItem)
-			assert.NoError(t, err)
-			assert.Equal(t, bill.Total.Amount, tc.expectTotal)
+			if tc.expectErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, bill.Total.Amount, tc.expectTotal)
+			}
 		})
 	}
 }
