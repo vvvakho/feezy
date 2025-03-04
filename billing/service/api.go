@@ -4,9 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	// "encore.dev/beta/auth"
-	// "encore.dev/beta/errs"
-	// "github.com/golang-jwt/jwt/v4"
 	"github.com/google/uuid"
 	"github.com/vvvakho/feezy/billing/service/domain"
 	tc "github.com/vvvakho/feezy/billing/service/temporal"

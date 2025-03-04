@@ -9,8 +9,6 @@ import (
 	"go.temporal.io/sdk/client"
 )
 
-//TODO: add logger
-
 //encore:service
 type Service struct {
 	TemporalClient client.Client
