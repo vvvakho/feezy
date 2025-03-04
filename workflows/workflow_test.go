@@ -1,4 +1,4 @@
-package workflow_test
+package workflows_test
 
 import (
 	"context"
@@ -12,7 +12,7 @@ import (
 	"go.temporal.io/sdk/testsuite"
 
 	"github.com/vvvakho/feezy/domain"
-	"github.com/vvvakho/feezy/workflow"
+	"github.com/vvvakho/feezy/workflows"
 )
 
 // MockActivities defines a mock implementation for the workflow activities.
@@ -78,7 +78,7 @@ func (s *UnitTestSuite) TestBillWorkflow_Execution() {
 
 	// Simulate signal arrival to prevent workflow from waiting indefinitely
 	s.env.RegisterDelayedCallback(func() {
-		s.env.SignalWorkflow(workflow.AddLineItemRoute.Name, workflow.AddItemSignal{
+		s.env.SignalWorkflow(workflows.AddLineItemRoute.Name, workflows.AddItemSignal{
 			LineItem: domain.Item{
 				ID:           uuid.New(),
 				PricePerUnit: domain.Money{Amount: 20, Currency: "USD"},
@@ -88,14 +88,14 @@ func (s *UnitTestSuite) TestBillWorkflow_Execution() {
 	}, time.Millisecond*10)
 
 	s.env.RegisterDelayedCallback(func() {
-		s.env.SignalWorkflow(workflow.CloseBillRoute.Name, workflow.CloseBillSignal{
+		s.env.SignalWorkflow(workflows.CloseBillRoute.Name, workflows.CloseBillSignal{
 			Route:     "CloseBillRoute",
 			RequestID: uuid.NewString(),
 		})
 	}, time.Millisecond*20)
 
 	// Execute the workflow
-	s.env.ExecuteWorkflow(workflow.BillWorkflow, bill)
+	s.env.ExecuteWorkflow(workflows.BillWorkflow, bill)
 
 	// Ensure the workflow has completed successfully
 	require.True(s.T(), s.env.IsWorkflowCompleted())
@@ -134,7 +134,7 @@ func (s *UnitTestSuite) Test_AddLineItem() {
 			PricePerUnit: domain.Money{Amount: 50, Currency: "USD"},
 			Quantity:     1,
 		}
-		s.env.SignalWorkflow(workflow.AddLineItemRoute.Name, workflow.AddItemSignal{
+		s.env.SignalWorkflow(workflows.AddLineItemRoute.Name, workflows.AddItemSignal{
 			LineItem: item,
 		})
 	}, time.Millisecond*1)
@@ -150,14 +150,14 @@ func (s *UnitTestSuite) Test_AddLineItem() {
 		s.Equal(domain.MinorUnit(50), queriedBill.Total.Amount)
 
 		// Send signal to close the bill
-		s.env.SignalWorkflow(workflow.CloseBillRoute.Name, workflow.CloseBillSignal{
+		s.env.SignalWorkflow(workflows.CloseBillRoute.Name, workflows.CloseBillSignal{
 			Route:     "CloseBillRoute",
 			RequestID: uuid.NewString(),
 		})
 	}, time.Millisecond*10)
 
 	// Execute the workflow
-	s.env.ExecuteWorkflow(workflow.BillWorkflow, bill)
+	s.env.ExecuteWorkflow(workflows.BillWorkflow, bill)
 
 	// Ensure workflow completed successfully
 	s.True(s.env.IsWorkflowCompleted())
@@ -202,7 +202,7 @@ func (s *UnitTestSuite) Test_AddLineItemMultiple() {
 			PricePerUnit: domain.Money{Amount: 50, Currency: "USD"},
 			Quantity:     1,
 		}
-		s.env.SignalWorkflow(workflow.AddLineItemRoute.Name, workflow.AddItemSignal{
+		s.env.SignalWorkflow(workflows.AddLineItemRoute.Name, workflows.AddItemSignal{
 			LineItem: item,
 		})
 	}, time.Millisecond*1)
@@ -224,7 +224,7 @@ func (s *UnitTestSuite) Test_AddLineItemMultiple() {
 			PricePerUnit: domain.Money{Amount: 50, Currency: "USD"},
 			Quantity:     3,
 		}
-		s.env.SignalWorkflow(workflow.AddLineItemRoute.Name, workflow.AddItemSignal{
+		s.env.SignalWorkflow(workflows.AddLineItemRoute.Name, workflows.AddItemSignal{
 			LineItem: item,
 		})
 	}, time.Millisecond*5)
@@ -243,14 +243,14 @@ func (s *UnitTestSuite) Test_AddLineItemMultiple() {
 		s.Equal(domain.MinorUnit(200), queriedBill.Total.Amount)
 
 		// Send signal to close the bill
-		s.env.SignalWorkflow(workflow.CloseBillRoute.Name, workflow.CloseBillSignal{
+		s.env.SignalWorkflow(workflows.CloseBillRoute.Name, workflows.CloseBillSignal{
 			Route:     "CloseBillRoute",
 			RequestID: uuid.NewString(),
 		})
 	}, time.Millisecond*15)
 
 	// Execute the workflow
-	s.env.ExecuteWorkflow(workflow.BillWorkflow, bill)
+	s.env.ExecuteWorkflow(workflows.BillWorkflow, bill)
 
 	// Ensure workflow completed successfully
 	s.True(s.env.IsWorkflowCompleted())
@@ -297,7 +297,7 @@ func (s *UnitTestSuite) Test_AddLineItemCurrencyDiff() {
 		s.Equal(0, len(queriedBill.Items))
 
 		// Send a signal to add a line item
-		s.env.SignalWorkflow(workflow.AddLineItemRoute.Name, workflow.AddItemSignal{
+		s.env.SignalWorkflow(workflows.AddLineItemRoute.Name, workflows.AddItemSignal{
 			LineItem: Item,
 		})
 	}, time.Millisecond*1)
@@ -316,14 +316,14 @@ func (s *UnitTestSuite) Test_AddLineItemCurrencyDiff() {
 		s.Equal(expAmount, queriedBill.Total.Amount)
 
 		// Send signal to close the bill
-		s.env.SignalWorkflow(workflow.CloseBillRoute.Name, workflow.CloseBillSignal{
+		s.env.SignalWorkflow(workflows.CloseBillRoute.Name, workflows.CloseBillSignal{
 			Route:     "CloseBillRoute",
 			RequestID: uuid.NewString(),
 		})
 	}, time.Millisecond*10)
 
 	// Execute the workflow
-	s.env.ExecuteWorkflow(workflow.BillWorkflow, bill)
+	s.env.ExecuteWorkflow(workflows.BillWorkflow, bill)
 
 	// Ensure workflow completed successfully
 	s.True(s.env.IsWorkflowCompleted())
@@ -354,7 +354,7 @@ func (s *UnitTestSuite) Test_AddRemoveLineItemPriceChanged() {
 
 	// Add an item to the bill
 	s.env.RegisterDelayedCallback(func() {
-		s.env.SignalWorkflow(workflow.AddLineItemRoute.Name, workflow.AddItemSignal{
+		s.env.SignalWorkflow(workflows.AddLineItemRoute.Name, workflows.AddItemSignal{
 			LineItem: domain.Item{
 				ID:           itemID,
 				PricePerUnit: domain.Money{Amount: 50, Currency: "USD"},
@@ -374,7 +374,7 @@ func (s *UnitTestSuite) Test_AddRemoveLineItemPriceChanged() {
 		s.Equal(domain.MinorUnit(50), queriedBill.Total.Amount)
 
 		// Try to add the same item ID but with a different price (should fail)
-		s.env.SignalWorkflow(workflow.AddLineItemRoute.Name, workflow.AddItemSignal{
+		s.env.SignalWorkflow(workflows.AddLineItemRoute.Name, workflows.AddItemSignal{
 			LineItem: domain.Item{
 				ID:           itemID,                                    // Same ID as before
 				PricePerUnit: domain.Money{Amount: 60, Currency: "USD"}, // Price changed
@@ -396,7 +396,7 @@ func (s *UnitTestSuite) Test_AddRemoveLineItemPriceChanged() {
 		s.Equal(domain.MinorUnit(50), queriedBill.Total.Amount) // Total should not have changed
 
 		// Try to remove the item with a different price (should fail)
-		s.env.SignalWorkflow(workflow.RemoveLineItemRoute.Name, workflow.RemoveItemSignal{
+		s.env.SignalWorkflow(workflows.RemoveLineItemRoute.Name, workflows.RemoveItemSignal{
 			LineItem: domain.Item{
 				ID:           itemID,                                    // Same ID
 				PricePerUnit: domain.Money{Amount: 60, Currency: "USD"}, // Price changed
@@ -418,14 +418,14 @@ func (s *UnitTestSuite) Test_AddRemoveLineItemPriceChanged() {
 		s.Equal(domain.MinorUnit(50), queriedBill.Total.Amount) // Total should be unchanged
 
 		// Close bill after testing
-		s.env.SignalWorkflow(workflow.CloseBillRoute.Name, workflow.CloseBillSignal{
+		s.env.SignalWorkflow(workflows.CloseBillRoute.Name, workflows.CloseBillSignal{
 			Route:     "CloseBillRoute",
 			RequestID: uuid.NewString(),
 		})
 	}, time.Millisecond*15)
 
 	// Execute the workflow
-	s.env.ExecuteWorkflow(workflow.BillWorkflow, bill)
+	s.env.ExecuteWorkflow(workflows.BillWorkflow, bill)
 
 	// Ensure workflow completed successfully
 	s.True(s.env.IsWorkflowCompleted())
@@ -460,7 +460,7 @@ func (s *UnitTestSuite) Test_RemoveLineItem() {
 
 	// Step 1: Add an item to the bill
 	s.env.RegisterDelayedCallback(func() {
-		s.env.SignalWorkflow(workflow.AddLineItemRoute.Name, workflow.AddItemSignal{
+		s.env.SignalWorkflow(workflows.AddLineItemRoute.Name, workflows.AddItemSignal{
 			LineItem: item,
 		})
 	}, time.Millisecond*1)
@@ -477,7 +477,7 @@ func (s *UnitTestSuite) Test_RemoveLineItem() {
 		s.Equal(domain.MinorUnit(100), queriedBill.Total.Amount)
 
 		// Send signal to remove one quantity of the item
-		s.env.SignalWorkflow(workflow.RemoveLineItemRoute.Name, workflow.RemoveItemSignal{
+		s.env.SignalWorkflow(workflows.RemoveLineItemRoute.Name, workflows.RemoveItemSignal{
 			LineItem: domain.Item{
 				ID:           item.ID,
 				PricePerUnit: item.PricePerUnit,
@@ -498,14 +498,14 @@ func (s *UnitTestSuite) Test_RemoveLineItem() {
 		s.Equal(domain.MinorUnit(50), queriedBill.Total.Amount) // Total updated
 
 		// Send signal to close the bill
-		s.env.SignalWorkflow(workflow.CloseBillRoute.Name, workflow.CloseBillSignal{
+		s.env.SignalWorkflow(workflows.CloseBillRoute.Name, workflows.CloseBillSignal{
 			Route:     "CloseBillRoute",
 			RequestID: uuid.NewString(),
 		})
 	}, time.Millisecond*10)
 
 	// Execute the workflow
-	s.env.ExecuteWorkflow(workflow.BillWorkflow, bill)
+	s.env.ExecuteWorkflow(workflows.BillWorkflow, bill)
 
 	// Ensure workflow completed successfully
 	s.True(s.env.IsWorkflowCompleted())
@@ -540,7 +540,7 @@ func (s *UnitTestSuite) Test_RemoveLineItemComplete() {
 
 	// Step 1: Add an item to the bill
 	s.env.RegisterDelayedCallback(func() {
-		s.env.SignalWorkflow(workflow.AddLineItemRoute.Name, workflow.AddItemSignal{
+		s.env.SignalWorkflow(workflows.AddLineItemRoute.Name, workflows.AddItemSignal{
 			LineItem: item,
 		})
 	}, time.Millisecond*1)
@@ -557,7 +557,7 @@ func (s *UnitTestSuite) Test_RemoveLineItemComplete() {
 		s.Equal(domain.MinorUnit(150), queriedBill.Total.Amount)
 
 		// Send signal to remove all quantity of the item
-		s.env.SignalWorkflow(workflow.RemoveLineItemRoute.Name, workflow.RemoveItemSignal{
+		s.env.SignalWorkflow(workflows.RemoveLineItemRoute.Name, workflows.RemoveItemSignal{
 			LineItem: domain.Item{
 				ID:           item.ID,
 				PricePerUnit: item.PricePerUnit,
@@ -577,14 +577,14 @@ func (s *UnitTestSuite) Test_RemoveLineItemComplete() {
 		s.Equal(domain.MinorUnit(0), queriedBill.Total.Amount) // Total is zero
 
 		// Send signal to close the bill
-		s.env.SignalWorkflow(workflow.CloseBillRoute.Name, workflow.CloseBillSignal{
+		s.env.SignalWorkflow(workflows.CloseBillRoute.Name, workflows.CloseBillSignal{
 			Route:     "CloseBillRoute",
 			RequestID: uuid.NewString(),
 		})
 	}, time.Millisecond*10)
 
 	// Execute the workflow
-	s.env.ExecuteWorkflow(workflow.BillWorkflow, bill)
+	s.env.ExecuteWorkflow(workflows.BillWorkflow, bill)
 
 	// Ensure workflow completed successfully
 	s.True(s.env.IsWorkflowCompleted())

@@ -1,4 +1,4 @@
-package workflow
+package workflows
 
 import (
 	"fmt"
@@ -11,7 +11,7 @@ import (
 )
 
 func BillWorkflow(ctx workflow.Context, bill *domain.Bill) (*domain.Bill, error) {
-	// Initiate workflow with context, logger, error channel
+	// Initiate workflows with context, logger, error channel
 	ctx, logger, err := initWorkflow(ctx, bill)
 	if err != nil {
 		return bill, err //TODO: fatal
@@ -44,9 +44,9 @@ func BillWorkflow(ctx workflow.Context, bill *domain.Bill) (*domain.Bill, error)
 	for {
 		selector.Select(ctx)
 
-		// Finish workflow when bill is closed
+		// Finish workflows when bill is closed
 		if bill.Status == domain.BillClosed {
-			logger.Info("Bill closed, finishing workflow.", "BillID", bill.ID)
+			logger.Info("Bill closed, finishing workflows.", "BillID", bill.ID)
 			break
 		}
 	}

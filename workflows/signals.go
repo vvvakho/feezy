@@ -1,4 +1,4 @@
-package workflow
+package workflows
 
 import (
 	"errors"
@@ -159,7 +159,7 @@ func HandleCloseBillSignal(ctx workflow.Context, c workflow.ReceiveChannel, bill
 				}
 			}
 			logger.Error("Error executing AddClosedBillToDB activity", "Error", err)
-			return err // Fail workflow for other errors
+			return err // Fail workflows for other errors
 		}
 
 		// Successfully closed the bill, exit loop

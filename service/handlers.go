@@ -1,4 +1,4 @@
-package service
+package billing
 
 import (
 	"context"
@@ -6,11 +6,11 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/vvvakho/feezy/domain"
-	"github.com/vvvakho/feezy/workflow"
+	"github.com/vvvakho/feezy/workflows"
 )
 
 // CreateBill creates a new bill for a given user and currency.
-// It starts an asynchronous Temporal workflow to manage the bill lifecycle.
+// It starts an asynchronous Temporal workflows to manage the bill lifecycle.
 // Returns the newly created bill's ID, status, and metadata.
 //
 // encore: api public method=POST path=/bills
@@ -24,7 +24,7 @@ func (s *Service) CreateBill(ctx context.Context, req *CreateBillRequest) (*Crea
 		return &CreateBillResponse{}, fmt.Errorf("Could not validate bill parameters: %v", err)
 	}
 
-	// Start workflow asynchronously
+	// Start workflows asynchronously
 	err = createBillWorkflow(ctx, s.TemporalClient, bill)
 	if err != nil {
 		return &CreateBillResponse{}, fmt.Errorf("Could not create bill: %v", err)
@@ -40,7 +40,7 @@ func (s *Service) CreateBill(ctx context.Context, req *CreateBillRequest) (*Crea
 }
 
 // GetBill retrieves the details of a specific bill by ID.
-// If the bill is active, it queries the Temporal workflow for its current state.
+// If the bill is active, it queries the Temporal workflows for its current state.
 // If the bill is closed, it fetches details from the database.
 //
 //encore:api public method=GET path=/bills/:id
@@ -48,7 +48,7 @@ func (s *Service) GetBill(ctx context.Context, id string) (*GetBillResponse, err
 	// Check if bill exists in open_bills DB
 	_, err := s.GetOpenBillFromDB(ctx, id)
 	if err == nil {
-		// Check if the workflow is running (only if bill is open)
+		// Check if the workflows is running (only if bill is open)
 		if err := isWorkflowRunning(s.TemporalClient, id); err == nil {
 			// Query Temporal Workflow for Bill Details
 			var bill domain.Bill
@@ -92,7 +92,7 @@ func (s *Service) GetBill(ctx context.Context, id string) (*GetBillResponse, err
 
 // AddLineItemToBill adds a new line item to an active bill.
 // If the bill is closed, the request is rejected.
-// Sends an asynchronous signal to the Temporal workflow.
+// Sends an asynchronous signal to the Temporal workflows.
 //
 //encore:api public method=POST path=/bills/:id/items
 func (s *Service) AddLineItemToBill(ctx context.Context, id string, req *AddLineItemRequest) (*AddLineItemResponse, error) {
@@ -134,7 +134,7 @@ func (s *Service) AddLineItemToBill(ctx context.Context, id string, req *AddLine
 
 // RemoveLineItemFromBill removes an existing line item from an active bill.
 // If the bill is closed, the request is rejected.
-// Sends an asynchronous signal to the Temporal workflow.
+// Sends an asynchronous signal to the Temporal workflows.
 //
 //encore:api public method=PATCH path=/bills/:id/items
 func (s *Service) RemoveLineItemFromBill(ctx context.Context, id string, req *RemoveLineItemRequest) (*RemoveLineItemResponse, error) {
@@ -173,7 +173,7 @@ func (s *Service) RemoveLineItemFromBill(ctx context.Context, id string, req *Re
 }
 
 // CloseBill finalizes an open bill, preventing further modifications.
-// Sends a signal to the Temporal workflow to mark the bill as closed.
+// Sends a signal to the Temporal workflows to mark the bill as closed.
 // Closed bills are moved to the database for storage.
 //
 //encore:api public method=POST path=/bills/:id
@@ -188,12 +188,12 @@ func (s *Service) CloseBill(ctx context.Context, id string, req *CloseBillReques
 		return nil, fmt.Errorf("Bill not found or already closed: %v", err)
 	}
 
-	// // Check if workflow is running
+	// // Check if workflows is running
 	// if err := isWorkflowRunning(s.TemporalClient, id); err != nil {
 	// 	return nil, fmt.Errorf("Bill not found or already closed: %v", err)
 	// }
 
-	err = closeBillSignal(ctx, s.TemporalClient, id, &workflow.CloseBillSignal{RequestID: req.RequestID})
+	err = closeBillSignal(ctx, s.TemporalClient, id, &workflows.CloseBillSignal{RequestID: req.RequestID})
 	if err != nil {
 		return nil, fmt.Errorf("Error signaling CloseBill task: %v", err)
 	}

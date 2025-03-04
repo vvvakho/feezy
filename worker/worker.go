@@ -5,7 +5,7 @@ import (
 	"log"
 
 	_ "github.com/lib/pq"
-	"github.com/vvvakho/feezy/workflow"
+	"github.com/vvvakho/feezy/workflows"
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/worker"
 )
@@ -28,16 +28,16 @@ func main() {
 	}
 	defer postgres.Close()
 
-	db := workflow.DB{
+	db := workflows.DB{
 		DBworker: postgres,
 	}
 
-	activities := &workflow.Activities{
+	activities := &workflows.Activities{
 		Repository: &db,
 	}
 
 	// Register Workflow and Activities
-	w.RegisterWorkflow(workflow.BillWorkflow)
+	w.RegisterWorkflow(workflows.BillWorkflow)
 	w.RegisterActivity(activities)
 
 	// Start worker

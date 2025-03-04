@@ -1,4 +1,4 @@
-package service
+package billing
 
 import (
 	"context"
@@ -21,25 +21,34 @@ var BillsDB = sqldb.NewDatabase("bills", sqldb.DatabaseConfig{
 })
 
 func initService() (*Service, error) {
-	// Initialize Temporal Client
+	// var c client.Client
+	// var err error
+	// var backoff time.Duration = time.Second
+
+	// // Retry Temporal connection with exponential backoff
+	// for attempts := 0; ; attempts++ { // Max 5 attempts before failure
+	// 	c, err = initTemporalClient()
+	// 	if err == nil {
+	// 		break
+	// 	}
+
+	// 	log.Printf("Temporal unavailable, retrying in %v: %v", backoff, err)
+	// 	time.Sleep(backoff)
+
+	// 	if backoff < 32*time.Second {
+	// 		backoff *= 2 // Exponential backoff
+	// 	}
+	// }
+
 	c, err := initTemporalClient()
 	if err != nil {
-		return nil, err
+		return &Service{}, fmt.Errorf("Unable to connect to Temporal: %v", err)
 	}
 
 	return &Service{
 		TemporalClient: c,
 		DBencore:       BillsDB,
 	}, nil
-}
-
-func initTemporalClient() (client.Client, error) {
-	// Connect to Temporal
-	c, err := client.Dial(client.Options{})
-	if err != nil {
-		return nil, fmt.Errorf("Failed to connect to Temporal: %v", err)
-	}
-	return c, nil
 }
 
 func (s *Service) Shutdown(force context.Context) {
