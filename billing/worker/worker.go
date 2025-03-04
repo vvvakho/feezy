@@ -5,7 +5,7 @@ import (
 	"log"
 
 	_ "github.com/lib/pq"
-	"github.com/vvvakho/feezy/workflows"
+	"github.com/vvvakho/feezy/billing/workflows"
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/worker"
 )

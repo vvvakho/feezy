@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/vvvakho/feezy/domain"
+	"github.com/vvvakho/feezy/billing/service/domain"
 	"go.temporal.io/sdk/log"
 	"go.temporal.io/sdk/workflow"
 )

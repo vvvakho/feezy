@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/vvvakho/feezy/domain"
+	"github.com/vvvakho/feezy/billing/service/domain"
 )
 
 func (s *Service) GetOpenBillFromDB(ctx context.Context, id string) (*domain.Bill, error) {

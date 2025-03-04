@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"encore.dev/storage/sqldb"
+	tc "github.com/vvvakho/feezy/billing/service/temporal"
 	"go.temporal.io/sdk/client"
 )
 
@@ -40,7 +41,7 @@ func initService() (*Service, error) {
 	// 	}
 	// }
 
-	c, err := initTemporalClient()
+	c, err := tc.InitTemporalClient()
 	if err != nil {
 		return &Service{}, fmt.Errorf("Unable to connect to Temporal: %v", err)
 	}

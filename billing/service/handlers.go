@@ -5,8 +5,9 @@ import (
 	"fmt"
 
 	"github.com/google/uuid"
-	"github.com/vvvakho/feezy/domain"
-	"github.com/vvvakho/feezy/workflows"
+	"github.com/vvvakho/feezy/billing/service/domain"
+	tc "github.com/vvvakho/feezy/billing/service/temporal"
+	"github.com/vvvakho/feezy/billing/workflows"
 )
 
 // CreateBill creates a new bill for a given user and currency.
@@ -25,7 +26,7 @@ func (s *Service) CreateBill(ctx context.Context, req *CreateBillRequest) (*Crea
 	}
 
 	// Start workflows asynchronously
-	err = createBillWorkflow(ctx, s.TemporalClient, bill)
+	err = tc.CreateBillWorkflow(ctx, s.TemporalClient, bill)
 	if err != nil {
 		return &CreateBillResponse{}, fmt.Errorf("Could not create bill: %v", err)
 	}
@@ -49,10 +50,10 @@ func (s *Service) GetBill(ctx context.Context, id string) (*GetBillResponse, err
 	_, err := s.GetOpenBillFromDB(ctx, id)
 	if err == nil {
 		// Check if the workflows is running (only if bill is open)
-		if err := isWorkflowRunning(s.TemporalClient, id); err == nil {
+		if err := tc.IsWorkflowRunning(s.TemporalClient, id); err == nil {
 			// Query Temporal Workflow for Bill Details
 			var bill domain.Bill
-			if err := getBillQuery(ctx, s.TemporalClient, id, &bill); err != nil {
+			if err := tc.GetBillQuery(ctx, s.TemporalClient, id, &bill); err != nil {
 				return nil, fmt.Errorf("Unable to query bill from Temporal: %v", err)
 			}
 
@@ -122,7 +123,7 @@ func (s *Service) AddLineItemToBill(ctx context.Context, id string, req *AddLine
 		PricePerUnit: req.PricePerUnit,
 	}
 
-	err = addLineItemSignal(ctx, s.TemporalClient, id, &billItem)
+	err = tc.AddLineItemSignal(ctx, s.TemporalClient, id, &billItem)
 	if err != nil {
 		return &AddLineItemResponse{}, fmt.Errorf("Unable to add line item to bill: %v", err)
 	}
@@ -164,7 +165,7 @@ func (s *Service) RemoveLineItemFromBill(ctx context.Context, id string, req *Re
 		PricePerUnit: req.PricePerUnit,
 	}
 
-	err = removeLineItemSignal(ctx, s.TemporalClient, id, &billItem)
+	err = tc.RemoveLineItemSignal(ctx, s.TemporalClient, id, &billItem)
 	if err != nil {
 		return &RemoveLineItemResponse{}, fmt.Errorf("Error signaling removeLineItem task: %v", err)
 	}
@@ -193,7 +194,7 @@ func (s *Service) CloseBill(ctx context.Context, id string, req *CloseBillReques
 	// 	return nil, fmt.Errorf("Bill not found or already closed: %v", err)
 	// }
 
-	err = closeBillSignal(ctx, s.TemporalClient, id, &workflows.CloseBillSignal{RequestID: req.RequestID})
+	err = tc.CloseBillSignal(ctx, s.TemporalClient, id, &workflows.CloseBillSignal{RequestID: req.RequestID})
 	if err != nil {
 		return nil, fmt.Errorf("Error signaling CloseBill task: %v", err)
 	}

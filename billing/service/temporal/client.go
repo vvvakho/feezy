@@ -1,16 +1,16 @@
-package billing
+package temporalclient
 
 import (
 	"context"
 	"fmt"
 
-	"github.com/vvvakho/feezy/domain"
-	"github.com/vvvakho/feezy/workflows"
+	"github.com/vvvakho/feezy/billing/service/domain"
+	"github.com/vvvakho/feezy/billing/workflows"
 	"go.temporal.io/api/enums/v1"
 	"go.temporal.io/sdk/client"
 )
 
-func initTemporalClient() (client.Client, error) {
+func InitTemporalClient() (client.Client, error) {
 	// Connect to Temporal
 	c, err := client.Dial(client.Options{})
 	if err != nil {
@@ -19,7 +19,7 @@ func initTemporalClient() (client.Client, error) {
 	return c, nil
 }
 
-func isWorkflowRunning(c client.Client, workflowsID string) error {
+func IsWorkflowRunning(c client.Client, workflowsID string) error {
 	response, err := c.DescribeWorkflowExecution(context.Background(), workflowsID, "")
 	if err != nil {
 		return err
@@ -30,7 +30,7 @@ func isWorkflowRunning(c client.Client, workflowsID string) error {
 	return nil
 }
 
-func getBillQuery(ctx context.Context, c client.Client, w string, bill *domain.Bill) error {
+func GetBillQuery(ctx context.Context, c client.Client, w string, bill *domain.Bill) error {
 	// Start signal synchronously
 	resp, err := c.QueryWorkflow(ctx, w, "", "getBill")
 	if err != nil {
@@ -44,7 +44,7 @@ func getBillQuery(ctx context.Context, c client.Client, w string, bill *domain.B
 	return nil
 }
 
-func createBillWorkflow(ctx context.Context, c client.Client, bill *domain.Bill) error {
+func CreateBillWorkflow(ctx context.Context, c client.Client, bill *domain.Bill) error {
 	_, err := c.ExecuteWorkflow(ctx, client.StartWorkflowOptions{
 		ID:        bill.ID.String(), //TODO: may need to edit workflows id to not just be bill id
 		TaskQueue: "create-bill-queue",
@@ -57,7 +57,7 @@ func createBillWorkflow(ctx context.Context, c client.Client, bill *domain.Bill)
 	return nil
 }
 
-func addLineItemSignal(ctx context.Context, c client.Client, w string, billItem *domain.Item) error {
+func AddLineItemSignal(ctx context.Context, c client.Client, w string, billItem *domain.Item) error {
 	err := c.SignalWorkflow(ctx, w, "", workflows.AddLineItemRoute.Name, workflows.AddItemSignal{LineItem: *billItem})
 	if err != nil {
 		return fmt.Errorf("Error signaling %s task: %v", workflows.AddLineItemRoute.Name, err)
@@ -66,7 +66,7 @@ func addLineItemSignal(ctx context.Context, c client.Client, w string, billItem 
 	return nil
 }
 
-func removeLineItemSignal(ctx context.Context, c client.Client, w string, billItem *domain.Item) error {
+func RemoveLineItemSignal(ctx context.Context, c client.Client, w string, billItem *domain.Item) error {
 	err := c.SignalWorkflow(ctx, w, "", workflows.RemoveLineItemRoute.Name, workflows.AddItemSignal{LineItem: *billItem})
 	if err != nil {
 		return fmt.Errorf("Error signaling %s task: %v", workflows.RemoveLineItemRoute.Name, err)
@@ -75,7 +75,7 @@ func removeLineItemSignal(ctx context.Context, c client.Client, w string, billIt
 	return nil
 }
 
-func closeBillSignal(ctx context.Context, c client.Client, w string, payload *workflows.CloseBillSignal) error {
+func CloseBillSignal(ctx context.Context, c client.Client, w string, payload *workflows.CloseBillSignal) error {
 	err := c.SignalWorkflow(ctx, w, "", workflows.CloseBillRoute.Name, payload)
 	if err != nil {
 		return fmt.Errorf("Error signaling %s task: %v", workflows.CloseBillRoute.Name, err)

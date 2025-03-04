@@ -5,7 +5,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
-	"github.com/vvvakho/feezy/domain"
+	"github.com/vvvakho/feezy/billing/service/domain"
 )
 
 func TestValidateCreateBillRequest(t *testing.T) {

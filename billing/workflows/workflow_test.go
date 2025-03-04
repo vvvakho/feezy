@@ -9,10 +9,9 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
+	"github.com/vvvakho/feezy/billing/service/domain"
+	"github.com/vvvakho/feezy/billing/workflows"
 	"go.temporal.io/sdk/testsuite"
-
-	"github.com/vvvakho/feezy/domain"
-	"github.com/vvvakho/feezy/workflows"
 )
 
 // MockActivities defines a mock implementation for the workflow activities.
