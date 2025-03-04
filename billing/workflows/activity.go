@@ -42,12 +42,12 @@ func (a *Activities) AddClosedBillToDB(ctx context.Context, bill *domain.Bill, r
 	return a.Repository.AddClosedBillToDB(ctx, bill, requestID)
 }
 
-type DB struct {
-	DBworker *sql.DB
+type Repo struct {
+	DB *sql.DB
 }
 
-func (db *DB) AddOpenBillToDB(ctx context.Context, bill *domain.Bill, requestID *string) error {
-	tx, err := db.DBworker.Begin()
+func (r *Repo) AddOpenBillToDB(ctx context.Context, bill *domain.Bill, requestID *string) error {
+	tx, err := r.DB.Begin()
 	if err != nil {
 		return fmt.Errorf("Error starting transaction: %v", err)
 	}
@@ -87,13 +87,13 @@ func (db *DB) AddOpenBillToDB(ctx context.Context, bill *domain.Bill, requestID 
 	return nil
 }
 
-func (db *DB) AddClosedBillToDB(ctx context.Context, bill *domain.Bill, requestID *string) error {
+func (r *Repo) AddClosedBillToDB(ctx context.Context, bill *domain.Bill, requestID *string) error {
 	// Validate requestID before initiating transaction
 	if requestID == nil {
 		return temporal.NewNonRetryableApplicationError("requestID cannot be nil", "InvalidRequestError", nil)
 	}
 
-	tx, err := db.DBworker.BeginTx(ctx, nil)
+	tx, err := r.DB.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("Error starting transaction: %v", err)
 	}

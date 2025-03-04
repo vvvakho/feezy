@@ -5,17 +5,28 @@ import (
 	"database/sql"
 	"fmt"
 
+	"encore.dev/storage/sqldb"
 	"github.com/vvvakho/feezy/billing/service/domain"
 )
 
-func (s *Service) GetOpenBillFromDB(ctx context.Context, id string) (*domain.Bill, error) {
+type Repository interface {
+	GetOpenBillFromDB(context.Context, string) (*domain.Bill, error)
+	GetClosedBillFromDB(context.Context, string) (*domain.Bill, error)
+	GetClosedBillItemsFromDB(context.Context, string) ([]domain.Item, error)
+}
+
+type Repo struct {
+	DB *sqldb.Database
+}
+
+func (r *Repo) GetOpenBillFromDB(ctx context.Context, id string) (*domain.Bill, error) {
 	query := `
 		SELECT id, user_id, currency, status, created_at, updated_at
 		FROM open_bills
 		WHERE id = $1;
 	`
 	var bill domain.Bill
-	row := s.DBencore.QueryRow(ctx, query, id)
+	row := r.DB.QueryRow(ctx, query, id)
 
 	err := row.Scan(
 		&bill.ID,
@@ -36,7 +47,7 @@ func (s *Service) GetOpenBillFromDB(ctx context.Context, id string) (*domain.Bil
 	return &bill, nil
 }
 
-func (s *Service) GetClosedBillFromDB(ctx context.Context, id string) (*domain.Bill, error) {
+func (r *Repo) GetClosedBillFromDB(ctx context.Context, id string) (*domain.Bill, error) {
 	query := `
 		SELECT id, user_id, status, total_amount, currency, created_at, updated_at, closed_at
 		FROM closed_bills
@@ -44,7 +55,7 @@ func (s *Service) GetClosedBillFromDB(ctx context.Context, id string) (*domain.B
 	`
 
 	var bill domain.Bill
-	row := s.DBencore.QueryRow(ctx, query, id)
+	row := r.DB.QueryRow(ctx, query, id)
 
 	err := row.Scan(
 		&bill.ID,
@@ -66,14 +77,14 @@ func (s *Service) GetClosedBillFromDB(ctx context.Context, id string) (*domain.B
 	return &bill, nil
 }
 
-func (s *Service) GetClosedBillItemsFromDB(ctx context.Context, billID string) ([]domain.Item, error) {
+func (r *Repo) GetClosedBillItemsFromDB(ctx context.Context, billID string) ([]domain.Item, error) {
 	// Validate the billID
 	if billID == "" {
 		return nil, fmt.Errorf("billID cannot be empty")
 	}
 
 	// Query the database for items associated with the given billID
-	rows, err := s.DBencore.Query(ctx, `
+	rows, err := r.DB.Query(ctx, `
 		SELECT item_id, description, quantity, unit_price, currency
 		FROM closed_bills_items
 		WHERE bill_id = $1

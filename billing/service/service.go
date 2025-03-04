@@ -14,7 +14,7 @@ import (
 //encore:service
 type Service struct {
 	TemporalClient client.Client
-	DBencore       *sqldb.Database
+	Repository     Repository
 }
 
 var BillsDB = sqldb.NewDatabase("bills", sqldb.DatabaseConfig{
@@ -46,9 +46,11 @@ func initService() (*Service, error) {
 		return &Service{}, fmt.Errorf("Unable to connect to Temporal: %v", err)
 	}
 
+	db := &Repo{DB: BillsDB}
+
 	return &Service{
 		TemporalClient: c,
-		DBencore:       BillsDB,
+		Repository:     db,
 	}, nil
 }
 

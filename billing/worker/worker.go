@@ -28,8 +28,8 @@ func main() {
 	}
 	defer postgres.Close()
 
-	db := workflows.DB{
-		DBworker: postgres,
+	db := workflows.Repo{
+		DB: postgres,
 	}
 
 	activities := &workflows.Activities{

@@ -47,7 +47,7 @@ func (s *Service) CreateBill(ctx context.Context, req *CreateBillRequest) (*Crea
 //encore:api public method=GET path=/bills/:id
 func (s *Service) GetBill(ctx context.Context, id string) (*GetBillResponse, error) {
 	// Check if bill exists in open_bills DB
-	_, err := s.GetOpenBillFromDB(ctx, id)
+	_, err := s.Repository.GetOpenBillFromDB(ctx, id)
 	if err == nil {
 		// Check if the workflows is running (only if bill is open)
 		if err := tc.IsWorkflowRunning(s.TemporalClient, id); err == nil {
@@ -70,12 +70,12 @@ func (s *Service) GetBill(ctx context.Context, id string) (*GetBillResponse, err
 	}
 
 	// If bill is not in open_bills, check closed_bills DB
-	closedBill, err := s.GetClosedBillFromDB(ctx, id)
+	closedBill, err := s.Repository.GetClosedBillFromDB(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("Bill not found: %v", err)
 	}
 
-	closedBillItems, err := s.GetClosedBillItemsFromDB(ctx, id)
+	closedBillItems, err := s.Repository.GetClosedBillItemsFromDB(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("Bill items not found: %v", err)
 	}
@@ -102,7 +102,7 @@ func (s *Service) AddLineItemToBill(ctx context.Context, id string, req *AddLine
 	}
 
 	// Check if bill exists in open_bills DB
-	_, err := s.GetOpenBillFromDB(ctx, id)
+	_, err := s.Repository.GetOpenBillFromDB(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("Bill not found or already closed: %v", err)
 	}
@@ -144,7 +144,7 @@ func (s *Service) RemoveLineItemFromBill(ctx context.Context, id string, req *Re
 	}
 
 	// Check if bill exists in open_bills DB
-	_, err := s.GetOpenBillFromDB(ctx, id)
+	_, err := s.Repository.GetOpenBillFromDB(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("Bill not found or already closed: %v", err)
 	}
@@ -184,7 +184,7 @@ func (s *Service) CloseBill(ctx context.Context, id string, req *CloseBillReques
 	}
 
 	// Check if bill exists in open_bills DB
-	_, err := s.GetOpenBillFromDB(ctx, id)
+	_, err := s.Repository.GetOpenBillFromDB(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("Bill not found or already closed: %v", err)
 	}
