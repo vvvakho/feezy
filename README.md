@@ -169,5 +169,5 @@ encore run
 
 ### Running Temporal Worker
 ```sh
-go run worker.go
+go run billing/worker/worker.go
 ```
