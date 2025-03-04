@@ -8,3 +8,7 @@ CREATE TABLE closed_bills_items (
     currency    CHAR(3) NOT NULL,
     UNIQUE (bill_id, item_id)
 ); --Todo: add created at, updated at for items
+
+-- Indices
+CREATE INDEX idx_closed_bills_items_bill_id ON closed_bills_items(bill_id);
+CREATE INDEX idx_closed_bills_items_item_id ON closed_bills_items(item_id);

@@ -4,17 +4,46 @@ import (
 	"context"
 	"fmt"
 
+	// "encore.dev/beta/auth"
+	// "encore.dev/beta/errs"
+	// "github.com/golang-jwt/jwt/v4"
 	"github.com/google/uuid"
 	"github.com/vvvakho/feezy/billing/service/domain"
 	tc "github.com/vvvakho/feezy/billing/service/temporal"
 	"github.com/vvvakho/feezy/billing/workflows"
 )
 
+//	type Claims struct {
+//		UserID string `json:"user_id"`
+//		Role   string `json:"role"`
+//		jwt.RegisteredClaims
+//	}
+//
+// //encore:authhandler
+// func AuthHandler(ctx context.Context, token string) (auth.UID, *Claims, error) {
+//
+//		var jwtKey = []byte("secret_key")
+//
+//		// Parse and validate the token
+//		claims := &Claims{}
+//		tkn, err := jwt.ParseWithClaims(token, claims, func(token *jwt.Token) (any, error) {
+//			return jwtKey, nil
+//		})
+//		if err != nil || !tkn.Valid {
+//			return "", nil, &errs.Error{
+//				Code:    errs.Unauthenticated,
+//				Message: "invalid or expired token",
+//			}
+//		}
+//		// Return the user ID and claims
+//		return auth.UID(claims.UserID), claims, nil
+//	}
+//
 // CreateBill creates a new bill for a given user and currency.
 // It starts an asynchronous Temporal workflows to manage the bill lifecycle.
 // Returns the newly created bill's ID, status, and metadata.
 //
-// encore: api public method=POST path=/bills
+// encore: api private method=POST path=/bills
 func (s *Service) CreateBill(ctx context.Context, req *CreateBillRequest) (*CreateBillResponse, error) {
 	if err := validateCreateBillRequest(req); err != nil {
 		return &CreateBillResponse{}, fmt.Errorf("Could not validate request: %v", err)
@@ -44,7 +73,7 @@ func (s *Service) CreateBill(ctx context.Context, req *CreateBillRequest) (*Crea
 // If the bill is active, it queries the Temporal workflows for its current state.
 // If the bill is closed, it fetches details from the database.
 //
-//encore:api public method=GET path=/bills/:id
+//encore:api private method=GET path=/bills/:id
 func (s *Service) GetBill(ctx context.Context, id string) (*GetBillResponse, error) {
 	// Check if bill exists in open_bills DB
 	_, err := s.Repository.GetOpenBillFromDB(ctx, id)
@@ -95,7 +124,7 @@ func (s *Service) GetBill(ctx context.Context, id string) (*GetBillResponse, err
 // If the bill is closed, the request is rejected.
 // Sends an asynchronous signal to the Temporal workflows.
 //
-//encore:api public method=POST path=/bills/:id/items
+//encore:api private method=POST path=/bills/:id/items
 func (s *Service) AddLineItemToBill(ctx context.Context, id string, req *AddLineItemRequest) (*AddLineItemResponse, error) {
 	if err := validateAddLineItemRequest(req); err != nil {
 		return &AddLineItemResponse{}, fmt.Errorf("Invalid request: %v", err)
@@ -137,7 +166,7 @@ func (s *Service) AddLineItemToBill(ctx context.Context, id string, req *AddLine
 // If the bill is closed, the request is rejected.
 // Sends an asynchronous signal to the Temporal workflows.
 //
-//encore:api public method=PATCH path=/bills/:id/items
+//encore:api private method=PATCH path=/bills/:id/items
 func (s *Service) RemoveLineItemFromBill(ctx context.Context, id string, req *RemoveLineItemRequest) (*RemoveLineItemResponse, error) {
 	if err := validateRemoveLineItemRequest(req); err != nil {
 		return &RemoveLineItemResponse{}, fmt.Errorf("Invalid request: %v", err)
@@ -177,7 +206,7 @@ func (s *Service) RemoveLineItemFromBill(ctx context.Context, id string, req *Re
 // Sends a signal to the Temporal workflows to mark the bill as closed.
 // Closed bills are moved to the database for storage.
 //
-//encore:api public method=POST path=/bills/:id
+//encore:api private method=POST path=/bills/:id
 func (s *Service) CloseBill(ctx context.Context, id string, req *CloseBillRequest) (*CloseBillResponse, error) {
 	if err := validateCloseBillRequest(id, req); err != nil {
 		return &CloseBillResponse{}, fmt.Errorf("Invalid request parameters: %v", err)
@@ -194,11 +223,15 @@ func (s *Service) CloseBill(ctx context.Context, id string, req *CloseBillReques
 	// 	return nil, fmt.Errorf("Bill not found or already closed: %v", err)
 	// }
 
-	err = tc.CloseBillSignal(ctx, s.TemporalClient, id, &workflows.CloseBillSignal{RequestID: req.RequestID})
+	// err = tc.CloseBillSignal(ctx, s.TemporalClient, id, &workflows.CloseBillSignal{RequestID: req.RequestID})
+	// if err != nil {
+	// 	return nil, fmt.Errorf("Error signaling CloseBill task: %v", err)
+	// }
+
+	closedBill, err := tc.CloseBillUpdate(ctx, s.TemporalClient, id, &workflows.CloseBillSignal{RequestID: req.RequestID})
 	if err != nil {
-		return nil, fmt.Errorf("Error signaling CloseBill task: %v", err)
+		return nil, fmt.Errorf("Error sending CloseBill update: %v", err)
 	}
 
-	return &CloseBillResponse{Status: "Request has been sent"}, nil
-	//TODO: need to think about synch vs asynch approach here, perhaps better use update?
+	return &CloseBillResponse{Bill: closedBill, Status: "Bill successfully closed"}, nil
 }

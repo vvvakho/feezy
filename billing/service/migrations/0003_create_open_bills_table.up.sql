@@ -7,3 +7,8 @@ CREATE TABLE open_bills (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Indices
+CREATE INDEX idx_open_bills_user_id ON open_bills(user_id);
+CREATE INDEX idx_open_bills_status ON open_bills(status);
+CREATE INDEX idx_open_bills_created_at ON open_bills(created_at);

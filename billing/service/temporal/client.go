@@ -75,8 +75,44 @@ func RemoveLineItemSignal(ctx context.Context, c client.Client, w string, billIt
 	return nil
 }
 
-func CloseBillSignal(ctx context.Context, c client.Client, w string, payload *workflows.CloseBillSignal) error {
-	err := c.SignalWorkflow(ctx, w, "", workflows.CloseBillRoute.Name, payload)
+func CloseBillSignal(ctx context.Context, c client.Client, w string, closeReq *workflows.CloseBillSignal) error {
+	err := c.SignalWorkflow(ctx, w, "", workflows.CloseBillRoute.Name, closeReq)
+	if err != nil {
+		return fmt.Errorf("Error signaling %s task: %v", workflows.CloseBillRoute.Name, err)
+	}
+
+	return nil
+}
+
+type CloseBillResult struct {
+}
+
+func CloseBillUpdate(ctx context.Context, c client.Client, w string, closeReq *workflows.CloseBillSignal) (*domain.Bill, error) {
+	updateHandle, err := c.UpdateWorkflow(ctx, client.UpdateWorkflowOptions{
+		WorkflowID:   w,
+		UpdateName:   "CloseBillUpdate",
+		WaitForStage: client.WorkflowUpdateStageCompleted,
+		Args:         []any{closeReq.RequestID},
+	})
+	if err != nil {
+		return &domain.Bill{}, fmt.Errorf("Error updating %s task: %v", "CloseBillUpdate", err)
+	}
+
+	var closedBill *domain.Bill
+	err = updateHandle.Get(ctx, &closedBill)
+	if err != nil {
+		return &domain.Bill{}, fmt.Errorf("Error getting update result: %v", err)
+	}
+
+	if err := CloseWorkflowSignal(ctx, c, w, closeReq); err != nil {
+		return &domain.Bill{}, fmt.Errorf("Error closing workflow: %v", err)
+	}
+
+	return closedBill, nil
+}
+
+func CloseWorkflowSignal(ctx context.Context, c client.Client, w string, closeReq *workflows.CloseBillSignal) error {
+	err := c.SignalWorkflow(ctx, w, "", workflows.CloseWorkflowRoute.Name, closeReq)
 	if err != nil {
 		return fmt.Errorf("Error signaling %s task: %v", workflows.CloseBillRoute.Name, err)
 	}

@@ -8,4 +8,10 @@ CREATE TABLE closed_bills (
     created_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     closed_at    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+-- ) PARTITION BY RANGE (created_at); -- we could also introduce time based partitioning here
 );
+
+-- Indices
+CREATE INDEX idx_closed_bills_user_id ON closed_bills(user_id);
+CREATE INDEX idx_closed_bills_status ON closed_bills(status);
+CREATE INDEX idx_closed_bills_created_at ON closed_bills(created_at);

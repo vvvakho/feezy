@@ -64,6 +64,10 @@ func validateAddLineItemRequest(req *AddLineItemRequest) error {
 		return fmt.Errorf("Invalid ID: %v", err)
 	}
 
+	if req.PricePerUnit.Amount < 0 {
+		return fmt.Errorf("Invalid price: %v", req.PricePerUnit)
+	}
+
 	if req.Quantity < 1 {
 		return fmt.Errorf("Invalid item quantity: %v", req.Quantity)
 	}
@@ -92,6 +96,14 @@ func validateRemoveLineItemRequest(req *RemoveLineItemRequest) error {
 	if err != nil {
 		return fmt.Errorf("Invalid item ID: %v", err)
 	}
+
+	if req.PricePerUnit.Amount < 0 {
+		return fmt.Errorf("Invalid price: %v", req.PricePerUnit)
+	}
+
+	if req.Quantity < 1 {
+		return fmt.Errorf("Invalid item quantity: %v", req.Quantity)
+	}
 	return nil
 }
 
@@ -100,6 +112,7 @@ type CloseBillRequest struct {
 }
 
 type CloseBillResponse struct {
+	Bill   *domain.Bill
 	Status string
 }
 

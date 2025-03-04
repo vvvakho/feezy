@@ -1,5 +1,3 @@
-interfaces
-invoice - items db
 auth for requests
 unit tests
 get bills per user

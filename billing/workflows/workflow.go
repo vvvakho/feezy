@@ -24,31 +24,41 @@ func BillWorkflow(ctx workflow.Context, bill *domain.Bill) (*domain.Bill, error)
 		return bill, err
 	}
 
-	// Set up handlers for signals
+	// Register the Update handler for closing the bill
+	err = HandleCloseBillUpdate(ctx, bill, logger)
+	if err != nil {
+		return bill, err
+	}
+
+	// Set up channels for signals
 	addLineItemChan := workflow.GetSignalChannel(ctx, AddLineItemRoute.Name)
 	removeLineItemChan := workflow.GetSignalChannel(ctx, RemoveLineItemRoute.Name)
 	closeBillChan := workflow.GetSignalChannel(ctx, CloseBillRoute.Name)
+	closeWorkflowChan := workflow.GetSignalChannel(ctx, CloseWorkflowRoute.Name)
 	selector := workflow.NewSelector(ctx)
 
+	// Register handlers for signals
 	registerSignalHandlers(
 		ctx,
 		selector,
 		addLineItemChan,
 		removeLineItemChan,
 		closeBillChan,
+		closeWorkflowChan,
 		bill,
 		logger,
 	)
 
 	// Start listening for events
 	for {
-		selector.Select(ctx)
 
 		// Finish workflows when bill is closed
 		if bill.Status == domain.BillClosed {
 			logger.Info("Bill closed, finishing workflows.", "BillID", bill.ID)
 			break
 		}
+
+		selector.Select(ctx)
 	}
 
 	return bill, nil
