@@ -17,18 +17,18 @@ import (
 // encore: api private method=POST path=/bills
 func (s *Service) CreateBill(ctx context.Context, req *CreateBillRequest) (*CreateBillResponse, error) {
 	if err := validateCreateBillRequest(req); err != nil {
-		return &CreateBillResponse{}, fmt.Errorf("Could not validate request: %v", err)
+		return nil, fmt.Errorf("Could not validate request: %v", err)
 	}
 
 	bill, err := domain.NewBill(req.UserID, req.Currency)
 	if err != nil {
-		return &CreateBillResponse{}, fmt.Errorf("Could not validate bill parameters: %v", err)
+		return nil, fmt.Errorf("Could not validate bill parameters: %v", err)
 	}
 
 	// Start workflows asynchronously
 	err = tc.CreateBillWorkflow(ctx, s.TemporalClient, bill)
 	if err != nil {
-		return &CreateBillResponse{}, fmt.Errorf("Could not create bill: %v", err)
+		return nil, fmt.Errorf("Could not create bill: %v", err)
 	}
 
 	return &CreateBillResponse{
@@ -100,7 +100,7 @@ func (s *Service) GetBill(ctx context.Context, id string) (*GetBillResponse, err
 //encore:api private method=POST path=/bills/:id/items
 func (s *Service) AddLineItemToBill(ctx context.Context, id string, req *AddLineItemRequest) (*AddLineItemResponse, error) {
 	if err := validateAddLineItemRequest(req); err != nil {
-		return &AddLineItemResponse{}, fmt.Errorf("Invalid request: %v", err)
+		return nil, fmt.Errorf("Invalid request: %v", err)
 	}
 
 	// Check if bill exists in open_bills DB
@@ -128,7 +128,7 @@ func (s *Service) AddLineItemToBill(ctx context.Context, id string, req *AddLine
 
 	err = tc.AddLineItemSignal(ctx, s.TemporalClient, id, &billItem)
 	if err != nil {
-		return &AddLineItemResponse{}, fmt.Errorf("Unable to add line item to bill: %v", err)
+		return nil, fmt.Errorf("Unable to add line item to bill: %v", err)
 	}
 
 	return &AddLineItemResponse{Message: "Request has been sent"}, nil
@@ -143,7 +143,7 @@ func (s *Service) AddLineItemToBill(ctx context.Context, id string, req *AddLine
 //encore:api private method=PATCH path=/bills/:id/items
 func (s *Service) RemoveLineItemFromBill(ctx context.Context, id string, req *RemoveLineItemRequest) (*RemoveLineItemResponse, error) {
 	if err := validateRemoveLineItemRequest(req); err != nil {
-		return &RemoveLineItemResponse{}, fmt.Errorf("Invalid request: %v", err)
+		return nil, fmt.Errorf("Invalid request: %v", err)
 	}
 
 	// Check if bill exists in open_bills DB
@@ -171,7 +171,7 @@ func (s *Service) RemoveLineItemFromBill(ctx context.Context, id string, req *Re
 
 	err = tc.RemoveLineItemSignal(ctx, s.TemporalClient, id, &billItem)
 	if err != nil {
-		return &RemoveLineItemResponse{}, fmt.Errorf("Error signaling removeLineItem task: %v", err)
+		return nil, fmt.Errorf("Error signaling removeLineItem task: %v", err)
 	}
 
 	return &RemoveLineItemResponse{Message: "Request has been sent"}, nil
@@ -184,7 +184,7 @@ func (s *Service) RemoveLineItemFromBill(ctx context.Context, id string, req *Re
 //encore:api private method=PATCH path=/bills/:id
 func (s *Service) CloseBill(ctx context.Context, id string, req *CloseBillRequest) (*CloseBillResponse, error) {
 	if err := validateCloseBillRequest(id, req); err != nil {
-		return &CloseBillResponse{}, fmt.Errorf("Invalid request parameters: %v", err)
+		return nil, fmt.Errorf("Invalid request parameters: %v", err)
 	}
 
 	// Check if bill exists in open_bills DB
