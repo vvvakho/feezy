@@ -21,16 +21,26 @@ Feezy is a **billing and fees management API** that provides an efficient way to
 ## Project Structure
 ```
 feezy/
-├── api.go         # API endpoints for bill management
-├── db.go          # Database repository for bill storage
-├── service.go     # Business logic and service layer
-├── domain.go      # Core domain models (Bill, Item, Money)
-├── worker.go      # Temporal worker setup
-├── client.go      # Temporal client for workflow interactions
-├── signals.go     # Workflow signal handlers
-├── workflow.go    # Temporal workflow definition
-├── activity.go    # Activity functions for database operations
-├── migrations/    # SQL migrations for bill storage
+├── billing/
+│   ├── conf/
+│   ├── service/
+│   │   ├── domain/
+│   │   │   └── domain.go    # Core domain models (Bill, Item, Money)
+│   │   ├── migrations/
+│   │   ├── temporal/
+│   │   │   └── client.go    # Temporal client for workflow interactions
+│   │   ├── api.go           # API endpoints for bill management
+│   │   ├── db.go            # Database repository for bill storage
+│   │   ├── dto.go           # Payload parameters for api requests
+│   │   └── service.go       # Business logic and service layer
+│   ├── worker/
+│   │   └── worker.go        # Temporal worker setup
+│   ├── workflows/
+│   │   ├── activity.go      # Activity functions for database operations
+│   │   ├── signals.go       # Workflow signal handlers
+│   │   ├── workflow.go      # Temporal workflow definition
+├── payments/                # Placeholder paymnets service
+├── notifications/           # Placeholder notificaitons service
 ```
 
 ## API Endpoints
