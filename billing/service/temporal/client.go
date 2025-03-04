@@ -84,9 +84,6 @@ func CloseBillSignal(ctx context.Context, c client.Client, w string, closeReq *w
 	return nil
 }
 
-type CloseBillResult struct {
-}
-
 func CloseBillUpdate(ctx context.Context, c client.Client, w string, closeReq *workflows.CloseBillSignal) (*domain.Bill, error) {
 	updateHandle, err := c.UpdateWorkflow(ctx, client.UpdateWorkflowOptions{
 		WorkflowID:   w,

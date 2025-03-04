@@ -13,32 +13,6 @@ import (
 	"github.com/vvvakho/feezy/billing/workflows"
 )
 
-//	type Claims struct {
-//		UserID string `json:"user_id"`
-//		Role   string `json:"role"`
-//		jwt.RegisteredClaims
-//	}
-//
-// //encore:authhandler
-// func AuthHandler(ctx context.Context, token string) (auth.UID, *Claims, error) {
-//
-//		var jwtKey = []byte("secret_key")
-//
-//		// Parse and validate the token
-//		claims := &Claims{}
-//		tkn, err := jwt.ParseWithClaims(token, claims, func(token *jwt.Token) (any, error) {
-//			return jwtKey, nil
-//		})
-//		if err != nil || !tkn.Valid {
-//			return "", nil, &errs.Error{
-//				Code:    errs.Unauthenticated,
-//				Message: "invalid or expired token",
-//			}
-//		}
-//		// Return the user ID and claims
-//		return auth.UID(claims.UserID), claims, nil
-//	}
-//
 // CreateBill creates a new bill for a given user and currency.
 // It starts an asynchronous Temporal workflows to manage the bill lifecycle.
 // Returns the newly created bill's ID, status, and metadata.
@@ -79,7 +53,9 @@ func (s *Service) GetBill(ctx context.Context, id string) (*GetBillResponse, err
 	_, err := s.Repository.GetOpenBillFromDB(ctx, id)
 	if err == nil {
 		// Check if the workflows is running (only if bill is open)
-		if err := tc.IsWorkflowRunning(s.TemporalClient, id); err == nil {
+		if err := tc.IsWorkflowRunning(s.TemporalClient, id); err != nil {
+			return nil, fmt.Errorf("Unexpected error fetching bill: %v", err)
+		} else {
 			// Query Temporal Workflow for Bill Details
 			var bill domain.Bill
 			if err := tc.GetBillQuery(ctx, s.TemporalClient, id, &bill); err != nil {
@@ -136,9 +112,10 @@ func (s *Service) AddLineItemToBill(ctx context.Context, id string, req *AddLine
 		return nil, fmt.Errorf("Bill not found or already closed: %v", err)
 	}
 
-	// if err := isWorkflowRunning(s.TemporalClient, id); err != nil {
-	// 	return nil, fmt.Errorf("Bill not found or already closed: %v", err)
-	// }
+	// Check if workflow is running
+	if err := tc.IsWorkflowRunning(s.TemporalClient, id); err != nil {
+		return nil, fmt.Errorf("Unexpected error fetching bill: %v", err)
+	}
 
 	itemID, err := uuid.Parse(req.ID)
 	if err != nil {
@@ -178,9 +155,10 @@ func (s *Service) RemoveLineItemFromBill(ctx context.Context, id string, req *Re
 		return nil, fmt.Errorf("Bill not found or already closed: %v", err)
 	}
 
-	// if err := isWorkflowRunning(s.TemporalClient, id); err != nil {
-	// 	return nil, fmt.Errorf("Bill not found or already closed: %v", err)
-	// }
+	// Check if workflow is running
+	if err := tc.IsWorkflowRunning(s.TemporalClient, id); err != nil {
+		return nil, fmt.Errorf("Unexpected error fetching bill: %v", err)
+	}
 
 	itemID, err := uuid.Parse(req.ID)
 	if err != nil {
@@ -206,7 +184,7 @@ func (s *Service) RemoveLineItemFromBill(ctx context.Context, id string, req *Re
 // Sends a signal to the Temporal workflows to mark the bill as closed.
 // Closed bills are moved to the database for storage.
 //
-//encore:api private method=POST path=/bills/:id
+//encore:api private method=PATCH path=/bills/:id
 func (s *Service) CloseBill(ctx context.Context, id string, req *CloseBillRequest) (*CloseBillResponse, error) {
 	if err := validateCloseBillRequest(id, req); err != nil {
 		return &CloseBillResponse{}, fmt.Errorf("Invalid request parameters: %v", err)
@@ -218,16 +196,13 @@ func (s *Service) CloseBill(ctx context.Context, id string, req *CloseBillReques
 		return nil, fmt.Errorf("Bill not found or already closed: %v", err)
 	}
 
-	// // Check if workflows is running
-	// if err := isWorkflowRunning(s.TemporalClient, id); err != nil {
-	// 	return nil, fmt.Errorf("Bill not found or already closed: %v", err)
-	// }
+	// Check if workflow is running
+	if err := tc.IsWorkflowRunning(s.TemporalClient, id); err != nil {
+		return nil, fmt.Errorf("Unexpected error fetching bill: %v", err)
+	}
 
-	// err = tc.CloseBillSignal(ctx, s.TemporalClient, id, &workflows.CloseBillSignal{RequestID: req.RequestID})
-	// if err != nil {
-	// 	return nil, fmt.Errorf("Error signaling CloseBill task: %v", err)
-	// }
-
+	// Perform a synchronous request to close bill and return its state
+	// Alternatively, we have an option to use CloseBillSignal() for asynchronicity
 	closedBill, err := tc.CloseBillUpdate(ctx, s.TemporalClient, id, &workflows.CloseBillSignal{RequestID: req.RequestID})
 	if err != nil {
 		return nil, fmt.Errorf("Error sending CloseBill update: %v", err)
