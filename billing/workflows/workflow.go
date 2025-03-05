@@ -48,7 +48,7 @@ func initWorkflow(ctx workflow.Context, bill *domain.Bill) (workflow.Context, wo
 	if err := workflow.SetQueryHandler(ctx, "getBill", func(input []byte) (*domain.Bill, error) {
 		return bill, nil
 	}); err != nil {
-		return nil, nil, nil, fmt.Errorf("SetQueryHandler failed: %v", err) //TODO: double check when to fatal vs log
+		return nil, nil, nil, fmt.Errorf("SetQueryHandler failed: %v", err)
 	}
 
 	// Add activitiy options to context

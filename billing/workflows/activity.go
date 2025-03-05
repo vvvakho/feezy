@@ -16,6 +16,7 @@ import (
 var AddOpenBillToDB string = "AddOpenBillToDB"
 var AddClosedBillToDB string = "AddClosedBillToDB"
 
+// Default options across activities, adjust based on needs
 var ao = workflow.ActivityOptions{
 	StartToCloseTimeout: 5 * time.Second,
 	RetryPolicy: &temporal.RetryPolicy{

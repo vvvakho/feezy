@@ -5,6 +5,7 @@ import (
 	"log"
 
 	_ "github.com/lib/pq"
+	"github.com/vvvakho/feezy/billing/conf"
 	"github.com/vvvakho/feezy/billing/workflows"
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/worker"
@@ -25,7 +26,7 @@ func main() {
 
 	// Establishing a separate DB connection lets us decouple from Encore
 	// in case we want to introduce independent horizontal worker scaling
-	postgres, err := sql.Open("postgres", "postgresql://feezy-zyei:local@127.0.0.1:9500/bills?sslmode=disable") //TODO: conn string from conf
+	postgres, err := sql.Open("postgres", conf.WORKER_DB_CONN)
 	if err != nil {
 		log.Fatalf("Failed to connect to DB: %v", err)
 	}

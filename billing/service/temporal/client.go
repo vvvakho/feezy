@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/vvvakho/feezy/billing/conf"
 	"github.com/vvvakho/feezy/billing/service/domain"
 	"github.com/vvvakho/feezy/billing/workflows"
 	"go.temporal.io/api/enums/v1"
@@ -15,7 +16,7 @@ var TemporalDial = client.Dial
 
 func InitTemporalClient() (client.Client, error) {
 	// Connect to Temporal
-	c, err := TemporalDial(client.Options{})
+	c, err := TemporalDial(conf.TEMPORAL_CLIENT_CONF)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to connect to Temporal: %v", err)
 	}
@@ -49,7 +50,7 @@ func GetBillQuery(ctx context.Context, c client.Client, w string, bill *domain.B
 
 func CreateBillWorkflow(ctx context.Context, c client.Client, bill *domain.Bill) error {
 	_, err := c.ExecuteWorkflow(ctx, client.StartWorkflowOptions{
-		ID:        bill.ID.String(), //TODO: may need to edit workflows id to not just be bill id
+		ID:        bill.ID.String(),
 		TaskQueue: "create-bill-queue",
 	}, workflows.BillWorkflow, bill)
 

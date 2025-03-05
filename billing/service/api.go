@@ -134,8 +134,6 @@ func (s *Service) AddLineItemToBill(ctx context.Context, id string, req *AddLine
 	return &AddLineItemResponse{Message: "Request has been sent"}, nil
 }
 
-//TODO: is PATCH appropriate ??
-
 // RemoveLineItemFromBill removes an existing line item from an active bill.
 // If the bill is closed, the request is rejected.
 // Sends an asynchronous signal to the Temporal workflows.
