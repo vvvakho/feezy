@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/vvvakho/feezy/billing/service/domain"
-	execution "github.com/vvvakho/feezy/billing/service/temporal"
+	"github.com/vvvakho/feezy/billing/service/execution"
 	"github.com/vvvakho/feezy/billing/workflows"
 )
 
