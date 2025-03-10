@@ -1,4 +1,4 @@
-package temporalclient
+package execution
 
 import (
 	"context"
@@ -11,20 +11,28 @@ import (
 	"go.temporal.io/sdk/client"
 )
 
-// Dependency injection -- primarily for mock testing
-var TemporalDial = client.Dial
+type TemporalClient struct {
+	Client client.Client
+}
 
-func InitTemporalClient() (client.Client, error) {
+// Dependency injection -- primarily for mock testing
+var WorkflowDial = client.Dial
+
+func New() (*TemporalClient, error) {
 	// Connect to Temporal
-	c, err := TemporalDial(conf.TEMPORAL_CLIENT_CONF)
+	c, err := WorkflowDial(conf.TEMPORAL_CLIENT_CONF)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to connect to Temporal: %v", err)
 	}
-	return c, nil
+	return &TemporalClient{Client: c}, nil
 }
 
-func IsWorkflowRunning(c client.Client, workflowsID string) error {
-	response, err := c.DescribeWorkflowExecution(context.Background(), workflowsID, "")
+func (tc *TemporalClient) Close() {
+	tc.Client.Close()
+}
+
+func (tc *TemporalClient) IsWorkflowRunning(workflowsID string) error {
+	response, err := tc.Client.DescribeWorkflowExecution(context.Background(), workflowsID, "")
 	if err != nil {
 		return err
 	}
@@ -34,9 +42,9 @@ func IsWorkflowRunning(c client.Client, workflowsID string) error {
 	return nil
 }
 
-func GetBillQuery(ctx context.Context, c client.Client, w string, bill *domain.Bill) error {
+func (tc *TemporalClient) GetBillQuery(ctx context.Context, w string, bill *domain.Bill) error {
 	// Start signal synchronously
-	resp, err := c.QueryWorkflow(ctx, w, "", "getBill")
+	resp, err := tc.Client.QueryWorkflow(ctx, w, "", "getBill")
 	if err != nil {
 		return fmt.Errorf("Unable to initiate query signal: %v", err)
 	}
@@ -48,8 +56,8 @@ func GetBillQuery(ctx context.Context, c client.Client, w string, bill *domain.B
 	return nil
 }
 
-func CreateBillWorkflow(ctx context.Context, c client.Client, bill *domain.Bill) error {
-	_, err := c.ExecuteWorkflow(ctx, client.StartWorkflowOptions{
+func (tc *TemporalClient) CreateBillWorkflow(ctx context.Context, bill *domain.Bill) error {
+	_, err := tc.Client.ExecuteWorkflow(ctx, client.StartWorkflowOptions{
 		ID:        bill.ID.String(),
 		TaskQueue: "create-bill-queue",
 	}, workflows.BillWorkflow, bill)
@@ -61,8 +69,8 @@ func CreateBillWorkflow(ctx context.Context, c client.Client, bill *domain.Bill)
 	return nil
 }
 
-func AddLineItemSignal(ctx context.Context, c client.Client, w string, billItem *domain.Item) error {
-	err := c.SignalWorkflow(ctx, w, "", workflows.AddLineItemRoute.Name, workflows.AddItemSignal{LineItem: *billItem})
+func (tc *TemporalClient) AddLineItemSignal(ctx context.Context, w string, billItem *domain.Item) error {
+	err := tc.Client.SignalWorkflow(ctx, w, "", workflows.AddLineItemRoute.Name, workflows.AddItemSignal{LineItem: *billItem})
 	if err != nil {
 		return fmt.Errorf("Error signaling %s task: %v", workflows.AddLineItemRoute.Name, err)
 	}
@@ -70,8 +78,8 @@ func AddLineItemSignal(ctx context.Context, c client.Client, w string, billItem 
 	return nil
 }
 
-func RemoveLineItemSignal(ctx context.Context, c client.Client, w string, billItem *domain.Item) error {
-	err := c.SignalWorkflow(ctx, w, "", workflows.RemoveLineItemRoute.Name, workflows.AddItemSignal{LineItem: *billItem})
+func (tc *TemporalClient) RemoveLineItemSignal(ctx context.Context, w string, billItem *domain.Item) error {
+	err := tc.Client.SignalWorkflow(ctx, w, "", workflows.RemoveLineItemRoute.Name, workflows.AddItemSignal{LineItem: *billItem})
 	if err != nil {
 		return fmt.Errorf("Error signaling %s task: %v", workflows.RemoveLineItemRoute.Name, err)
 	}
@@ -79,8 +87,8 @@ func RemoveLineItemSignal(ctx context.Context, c client.Client, w string, billIt
 	return nil
 }
 
-func CloseBillSignal(ctx context.Context, c client.Client, w string, closeReq *workflows.CloseBillSignal) error {
-	err := c.SignalWorkflow(ctx, w, "", workflows.CloseBillRoute.Name, closeReq)
+func (tc *TemporalClient) CloseBillSignal(ctx context.Context, w string, closeReq *workflows.CloseBillSignal) error {
+	err := tc.Client.SignalWorkflow(ctx, w, "", workflows.CloseBillRoute.Name, closeReq)
 	if err != nil {
 		return fmt.Errorf("Error signaling %s task: %v", workflows.CloseBillRoute.Name, err)
 	}
@@ -88,8 +96,8 @@ func CloseBillSignal(ctx context.Context, c client.Client, w string, closeReq *w
 	return nil
 }
 
-func CloseBillUpdate(ctx context.Context, c client.Client, w string, closeReq *workflows.CloseBillSignal) (*domain.Bill, error) {
-	updateHandle, err := c.UpdateWorkflow(ctx, client.UpdateWorkflowOptions{
+func (tc *TemporalClient) CloseBillUpdate(ctx context.Context, w string, closeReq *workflows.CloseBillSignal) (*domain.Bill, error) {
+	updateHandle, err := tc.Client.UpdateWorkflow(ctx, client.UpdateWorkflowOptions{
 		WorkflowID:   w,
 		UpdateName:   "CloseBillUpdate",
 		WaitForStage: client.WorkflowUpdateStageCompleted,
@@ -105,15 +113,15 @@ func CloseBillUpdate(ctx context.Context, c client.Client, w string, closeReq *w
 		return &domain.Bill{}, fmt.Errorf("Error getting update result: %v", err)
 	}
 
-	if err := CloseWorkflowSignal(ctx, c, w, closeReq); err != nil {
+	if err := tc.CloseWorkflowSignal(ctx, w, closeReq); err != nil {
 		return &domain.Bill{}, fmt.Errorf("Error closing workflow: %v", err)
 	}
 
 	return closedBill, nil
 }
 
-func CloseWorkflowSignal(ctx context.Context, c client.Client, w string, closeReq *workflows.CloseBillSignal) error {
-	err := c.SignalWorkflow(ctx, w, "", workflows.CloseWorkflowRoute.Name, closeReq)
+func (tc *TemporalClient) CloseWorkflowSignal(ctx context.Context, w string, closeReq *workflows.CloseBillSignal) error {
+	err := tc.Client.SignalWorkflow(ctx, w, "", workflows.CloseWorkflowRoute.Name, closeReq)
 	if err != nil {
 		return fmt.Errorf("Error signaling %s task: %v", workflows.CloseBillRoute.Name, err)
 	}

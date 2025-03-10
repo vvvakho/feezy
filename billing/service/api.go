@@ -6,7 +6,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/vvvakho/feezy/billing/service/domain"
-	tc "github.com/vvvakho/feezy/billing/service/temporal"
 	"github.com/vvvakho/feezy/billing/workflows"
 )
 
@@ -26,7 +25,7 @@ func (s *Service) CreateBill(ctx context.Context, req *CreateBillRequest) (*Crea
 	}
 
 	// Start workflows asynchronously
-	err = tc.CreateBillWorkflow(ctx, s.TemporalClient, bill)
+	err = s.Execution.CreateBillWorkflow(ctx, bill)
 	if err != nil {
 		return nil, fmt.Errorf("Could not create bill: %v", err)
 	}
@@ -50,12 +49,12 @@ func (s *Service) GetBill(ctx context.Context, id string) (*GetBillResponse, err
 	_, err := s.Repository.GetOpenBillFromDB(ctx, id)
 	if err == nil {
 		// Check if the workflows is running (only if bill is open)
-		if err := tc.IsWorkflowRunning(s.TemporalClient, id); err != nil {
+		if err := s.Execution.IsWorkflowRunning(id); err != nil {
 			return nil, fmt.Errorf("Unexpected error fetching bill: %v", err)
 		} else {
 			// Query Temporal Workflow for Bill Details
 			var bill domain.Bill
-			if err := tc.GetBillQuery(ctx, s.TemporalClient, id, &bill); err != nil {
+			if err := s.Execution.GetBillQuery(ctx, id, &bill); err != nil {
 				return nil, fmt.Errorf("Unable to query bill from Temporal: %v", err)
 			}
 
@@ -110,7 +109,7 @@ func (s *Service) AddLineItemToBill(ctx context.Context, id string, req *AddLine
 	}
 
 	// Check if workflow is running
-	if err := tc.IsWorkflowRunning(s.TemporalClient, id); err != nil {
+	if err := s.Execution.IsWorkflowRunning(id); err != nil {
 		return nil, fmt.Errorf("Unexpected error fetching bill: %v", err)
 	}
 
@@ -126,7 +125,7 @@ func (s *Service) AddLineItemToBill(ctx context.Context, id string, req *AddLine
 		PricePerUnit: req.PricePerUnit,
 	}
 
-	err = tc.AddLineItemSignal(ctx, s.TemporalClient, id, &billItem)
+	err = s.Execution.AddLineItemSignal(ctx, id, &billItem)
 	if err != nil {
 		return nil, fmt.Errorf("Unable to add line item to bill: %v", err)
 	}
@@ -151,7 +150,7 @@ func (s *Service) RemoveLineItemFromBill(ctx context.Context, id string, req *Re
 	}
 
 	// Check if workflow is running
-	if err := tc.IsWorkflowRunning(s.TemporalClient, id); err != nil {
+	if err := s.Execution.IsWorkflowRunning(id); err != nil {
 		return nil, fmt.Errorf("Unexpected error fetching bill: %v", err)
 	}
 
@@ -167,7 +166,7 @@ func (s *Service) RemoveLineItemFromBill(ctx context.Context, id string, req *Re
 		PricePerUnit: req.PricePerUnit,
 	}
 
-	err = tc.RemoveLineItemSignal(ctx, s.TemporalClient, id, &billItem)
+	err = s.Execution.RemoveLineItemSignal(ctx, id, &billItem)
 	if err != nil {
 		return nil, fmt.Errorf("Error signaling removeLineItem task: %v", err)
 	}
@@ -192,13 +191,13 @@ func (s *Service) CloseBill(ctx context.Context, id string, req *CloseBillReques
 	}
 
 	// Check if workflow is running
-	if err := tc.IsWorkflowRunning(s.TemporalClient, id); err != nil {
+	if err := s.Execution.IsWorkflowRunning(id); err != nil {
 		return nil, fmt.Errorf("Unexpected error fetching bill: %v", err)
 	}
 
 	// Perform a synchronous request to close bill and return its state
 	// Alternatively, we have an option to use CloseBillSignal() for asynchronicity
-	closedBill, err := tc.CloseBillUpdate(ctx, s.TemporalClient, id, &workflows.CloseBillSignal{RequestID: req.RequestID})
+	closedBill, err := s.Execution.CloseBillUpdate(ctx, id, &workflows.CloseBillSignal{RequestID: req.RequestID})
 	if err != nil {
 		return nil, fmt.Errorf("Error sending CloseBill update: %v", err)
 	}

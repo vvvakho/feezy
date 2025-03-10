@@ -9,14 +9,16 @@ import (
 	"github.com/vvvakho/feezy/billing/service/domain"
 )
 
-type Repository interface {
-	GetOpenBillFromDB(context.Context, string) (*domain.Bill, error)
-	GetClosedBillFromDB(context.Context, string) (*domain.Bill, error)
-	GetClosedBillItemsFromDB(context.Context, string) ([]domain.Item, error)
-}
+var BillsDB = sqldb.NewDatabase("bills", sqldb.DatabaseConfig{
+	Migrations: "./migrations",
+})
 
 type Repo struct {
 	DB *sqldb.Database
+}
+
+func NewRepo() (*Repo, error) {
+	return &Repo{DB: BillsDB}, nil
 }
 
 func (r *Repo) GetOpenBillFromDB(ctx context.Context, id string) (*domain.Bill, error) {
