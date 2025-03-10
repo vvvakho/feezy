@@ -44,6 +44,9 @@ func initWorkflow(ctx workflow.Context, bill *domain.Bill) (workflow.Context, wo
 	bill.CreatedAt = time.Now()
 	bill.UpdatedAt = time.Now()
 
+	// Create a mutex for safe concurrency
+	mu := workflow.NewMutex(ctx)
+
 	// Register handler for GetBill
 	if err := workflow.SetQueryHandler(ctx, "getBill", func(input []byte) (*domain.Bill, error) {
 		return bill, nil
@@ -51,11 +54,11 @@ func initWorkflow(ctx workflow.Context, bill *domain.Bill) (workflow.Context, wo
 		return nil, nil, nil, fmt.Errorf("SetQueryHandler failed: %v", err)
 	}
 
-	// Add activitiy options to context
+	// Add custom default activitiy options to context
 	ctx = workflow.WithActivityOptions(ctx, ao)
 
 	// Register the Update handler for closing the bill
-	err := HandleCloseBillUpdate(ctx, bill, logger)
+	err := HandleCloseBillUpdate(ctx, mu, bill, logger)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("Error registering handler for CloseBillUpdate: %v", err)
 	}
@@ -70,6 +73,7 @@ func initWorkflow(ctx workflow.Context, bill *domain.Bill) (workflow.Context, wo
 	// Register handlers for signals
 	registerSignalHandlers(
 		ctx,
+		mu,
 		selector,
 		addLineItemChan,
 		removeLineItemChan,

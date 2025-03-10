@@ -150,7 +150,7 @@ func (r *Repo) AddClosedBillToDB(ctx context.Context, bill *domain.Bill, request
 			// Bill closed with a different requestID: non-retryable error
 			return temporal.NewNonRetryableApplicationError(
 				"bill already closed with a different request",
-				"BillAlreadyClosedError",
+				"DuplicateRequestError",
 				nil,
 			)
 		}
@@ -199,6 +199,7 @@ func isUserInputError(err error) bool {
 		return false
 	}
 	errMsg := err.Error()
+	// Check whether the error from the database transaction contains certain flags
 	return strings.Contains(errMsg, "duplicate key value")
 	// We can define other User related errors below
 }
