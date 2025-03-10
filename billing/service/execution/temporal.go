@@ -15,12 +15,9 @@ type TemporalClient struct {
 	Client client.Client
 }
 
-// Dependency injection -- primarily for mock testing
-var WorkflowDial = client.Dial
-
 func New() (*TemporalClient, error) {
 	// Connect to Temporal
-	c, err := WorkflowDial(conf.TEMPORAL_CLIENT_CONF)
+	c, err := client.Dial(conf.TEMPORAL_CLIENT_CONF)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to connect to Temporal: %v", err)
 	}

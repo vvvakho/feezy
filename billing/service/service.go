@@ -54,4 +54,5 @@ func initService() (*Service, error) {
 }
 
 func (s *Service) Shutdown(force context.Context) {
+	s.Execution.Close()
 }

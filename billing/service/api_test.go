@@ -13,7 +13,6 @@ import (
 )
 
 func TestCreateBill(t *testing.T) {
-	// Define test cases
 	tests := []struct {
 		name                string
 		userID              string
@@ -74,11 +73,9 @@ func TestCreateBill(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Initialize GoMock controller
 			ctrl := gomock.NewController(t)
 			defer ctrl.Finish()
 
-			// Create mock dependencies
 			mockExecution := mock_billing.NewMockExecution(ctrl)
 			mockRepository := mock_billing.NewMockRepository(ctrl)
 
@@ -88,7 +85,6 @@ func TestCreateBill(t *testing.T) {
 				Repository: mockRepository,
 			}
 
-			// Define test input
 			req := &CreateBillRequest{
 				UserID:   tt.userID,
 				Currency: tt.currency,
@@ -102,7 +98,6 @@ func TestCreateBill(t *testing.T) {
 					Times(1)
 			}
 
-			// Call the function with debug logging
 			fmt.Println("Running test case:", tt.name)
 			resp, err := s.CreateBill(context.Background(), req)
 
@@ -308,7 +303,7 @@ func TestAddLineItemToBill(t *testing.T) {
 
 			ctx := context.Background()
 
-			// Skip mock expectations if validation should fail first
+			// Skip mock expectations if validation fails
 			if tt.shouldValidate {
 				// Mock bill retrieval
 				if tt.openBillExists {
@@ -325,6 +320,222 @@ func TestAddLineItemToBill(t *testing.T) {
 			}
 
 			resp, err := s.AddLineItemToBill(ctx, tt.billID, tt.request)
+
+			if tt.expectError {
+				assert.Error(t, err)
+				assert.Nil(t, resp)
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, resp)
+			}
+		})
+	}
+}
+
+func TestRemoveLineItemFromBill(t *testing.T) {
+	tests := []struct {
+		name            string
+		billID          string
+		request         *RemoveLineItemRequest
+		openBillExists  bool
+		workflowRunning bool
+		mockError       error
+		expectError     bool
+		skipMockCalls   bool
+	}{
+		{
+			name:   "Success - Line Item Removed",
+			billID: uuid.New().String(),
+			request: &RemoveLineItemRequest{
+				ID:          uuid.New().String(),
+				Quantity:    1,
+				Description: "Test Item",
+				PricePerUnit: domain.Money{
+					Amount:   10,
+					Currency: "USD",
+				},
+			},
+			openBillExists:  true,
+			workflowRunning: true,
+			mockError:       nil,
+			expectError:     false,
+		},
+		{
+			name:   "Failure - Bill Not Found",
+			billID: uuid.New().String(),
+			request: &RemoveLineItemRequest{
+				ID:          uuid.New().String(),
+				Quantity:    1,
+				Description: "Invalid Bill",
+				PricePerUnit: domain.Money{
+					Amount:   5,
+					Currency: "USD",
+				},
+			},
+			openBillExists: false,
+			mockError:      nil,
+			expectError:    true,
+		},
+		{
+			name:   "Failure - Invalid Item ID",
+			billID: uuid.New().String(),
+			request: &RemoveLineItemRequest{
+				ID:          "invalid-uuid",
+				Quantity:    1,
+				Description: "Test Item",
+				PricePerUnit: domain.Money{
+					Amount:   10,
+					Currency: "USD",
+				},
+			},
+			openBillExists: true,
+			mockError:      nil,
+			expectError:    true,
+			skipMockCalls:  true,
+		},
+		{
+			name:   "Failure - Negative Price",
+			billID: uuid.New().String(),
+			request: &RemoveLineItemRequest{
+				ID:          uuid.New().String(),
+				Quantity:    1,
+				Description: "Negative Price Item",
+				PricePerUnit: domain.Money{
+					Amount:   -5,
+					Currency: "USD",
+				},
+			},
+			openBillExists: true,
+			mockError:      nil,
+			expectError:    true,
+			skipMockCalls:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			mockExecution := mock_billing.NewMockExecution(ctrl)
+			mockRepository := mock_billing.NewMockRepository(ctrl)
+
+			s := &Service{
+				Execution:  mockExecution,
+				Repository: mockRepository,
+			}
+
+			ctx := context.Background()
+
+			if !tt.skipMockCalls {
+				// Mock bill retrieval
+				if tt.openBillExists {
+					mockRepository.EXPECT().GetOpenBillFromDB(ctx, tt.billID).Return(&domain.Bill{}, nil)
+					mockExecution.EXPECT().IsWorkflowRunning(tt.billID).Return(nil)
+				} else {
+					mockRepository.EXPECT().GetOpenBillFromDB(ctx, tt.billID).Return(nil, assert.AnError)
+				}
+
+				// Mock removing line item
+				if tt.openBillExists && !tt.expectError {
+					mockExecution.EXPECT().RemoveLineItemSignal(ctx, tt.billID, gomock.Any()).Return(tt.mockError)
+				}
+			}
+
+			resp, err := s.RemoveLineItemFromBill(ctx, tt.billID, tt.request)
+
+			if tt.expectError {
+				assert.Error(t, err)
+				assert.Nil(t, resp)
+			} else {
+				assert.NoError(t, err)
+				assert.NotNil(t, resp)
+			}
+		})
+	}
+}
+
+func TestCloseBill(t *testing.T) {
+	tests := []struct {
+		name            string
+		billID          string
+		request         *CloseBillRequest
+		openBillExists  bool
+		workflowRunning bool
+		mockError       error
+		expectError     bool
+		skipMockCalls   bool
+	}{
+		{
+			name:   "Success - Bill Closed Successfully",
+			billID: uuid.New().String(),
+			request: &CloseBillRequest{
+				RequestID: uuid.New().String(),
+			},
+			openBillExists:  true,
+			workflowRunning: true,
+			mockError:       nil,
+			expectError:     false,
+		},
+		{
+			name:   "Failure - Bill Not Found",
+			billID: uuid.New().String(),
+			request: &CloseBillRequest{
+				RequestID: uuid.New().String(),
+			},
+			openBillExists: false,
+			mockError:      nil,
+			expectError:    true,
+		},
+		{
+			name:   "Failure - Invalid Bill ID",
+			billID: "invalid-uuid",
+			request: &CloseBillRequest{
+				RequestID: uuid.New().String(),
+			},
+			expectError:   true,
+			skipMockCalls: true,
+		},
+		{
+			name:   "Failure - Workflow Error",
+			billID: uuid.New().String(),
+			request: &CloseBillRequest{
+				RequestID: uuid.New().String(),
+			},
+			openBillExists:  true,
+			workflowRunning: true,
+			mockError:       assert.AnError,
+			expectError:     true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+
+			mockExecution := mock_billing.NewMockExecution(ctrl)
+			mockRepository := mock_billing.NewMockRepository(ctrl)
+
+			s := &Service{
+				Execution:  mockExecution,
+				Repository: mockRepository,
+			}
+
+			ctx := context.Background()
+
+			if !tt.skipMockCalls {
+				// Mock bill retrieval
+				if tt.openBillExists {
+					mockRepository.EXPECT().GetOpenBillFromDB(ctx, tt.billID).Return(&domain.Bill{}, nil)
+					mockExecution.EXPECT().IsWorkflowRunning(tt.billID).Return(nil)
+					mockExecution.EXPECT().CloseBillUpdate(ctx, tt.billID, gomock.Any()).Return(&domain.Bill{}, tt.mockError)
+				} else {
+					mockRepository.EXPECT().GetOpenBillFromDB(ctx, tt.billID).Return(nil, assert.AnError)
+				}
+			}
+
+			resp, err := s.CloseBill(ctx, tt.billID, tt.request)
 
 			if tt.expectError {
 				assert.Error(t, err)
