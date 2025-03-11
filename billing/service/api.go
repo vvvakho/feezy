@@ -45,8 +45,17 @@ func (s *Service) CreateBill(ctx context.Context, req *CreateBillRequest) (*Crea
 //
 //encore:api private method=GET path=/bills/:id
 func (s *Service) GetBill(ctx context.Context, id string) (*GetBillResponse, error) {
+	// Check cache for bill entry
+	cachedBill, err := s.Cache.Get(ctx, id)
+	if err == nil {
+		// Cache hit; return the cached bill
+		fmt.Printf("Cache HIT!")
+		return &cachedBill, nil
+	}
+
+	// Cache miss, proceed with bill retrieval from DB
 	// Check if bill exists in open_bills DB
-	_, err := s.Repository.GetOpenBillFromDB(ctx, id)
+	_, err = s.Repository.GetOpenBillFromDB(ctx, id)
 	if err == nil {
 		// Check if the workflows is running (only if bill is open)
 		if err := s.Execution.IsWorkflowRunning(id); err != nil {
@@ -58,7 +67,7 @@ func (s *Service) GetBill(ctx context.Context, id string) (*GetBillResponse, err
 				return nil, fmt.Errorf("Unable to query bill from Temporal: %v", err)
 			}
 
-			return &GetBillResponse{
+			resp := GetBillResponse{
 				ID:        bill.ID.String(),
 				Items:     bill.Items,
 				Total:     bill.Total,
@@ -66,7 +75,14 @@ func (s *Service) GetBill(ctx context.Context, id string) (*GetBillResponse, err
 				UserID:    bill.UserID.String(),
 				CreatedAt: bill.CreatedAt,
 				UpdatedAt: bill.UpdatedAt,
-			}, nil
+			}
+
+			// Update the cache
+			if err := s.Cache.Set(ctx, id, resp); err != nil {
+				return nil, fmt.Errorf("failed to update cache: %v", err)
+			}
+
+			return &resp, nil
 		}
 	}
 
@@ -76,12 +92,13 @@ func (s *Service) GetBill(ctx context.Context, id string) (*GetBillResponse, err
 		return nil, fmt.Errorf("Bill not found: %v", err)
 	}
 
+	// Get bill items from closed_bill_items
 	closedBillItems, err := s.Repository.GetClosedBillItemsFromDB(ctx, id)
 	if err != nil {
 		return nil, fmt.Errorf("Bill items not found: %v", err)
 	}
 
-	return &GetBillResponse{
+	resp := GetBillResponse{
 		ID:        closedBill.ID.String(),
 		Items:     closedBillItems,
 		Total:     closedBill.Total,
@@ -89,7 +106,14 @@ func (s *Service) GetBill(ctx context.Context, id string) (*GetBillResponse, err
 		UserID:    closedBill.UserID.String(),
 		CreatedAt: closedBill.CreatedAt,
 		UpdatedAt: closedBill.UpdatedAt,
-	}, nil
+	}
+
+	// Update Cache
+	if err := s.Cache.Set(ctx, id, resp); err != nil {
+		return nil, fmt.Errorf("failed to update cache: %v", err)
+	}
+
+	return &resp, nil
 }
 
 // AddLineItemToBill adds a new line item to an active bill.

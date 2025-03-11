@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"log"
 
+	_ "github.com/alicebob/miniredis/v2"
 	_ "github.com/lib/pq"
 	"github.com/vvvakho/feezy/billing/conf"
 	"github.com/vvvakho/feezy/billing/workflows"
@@ -11,8 +12,8 @@ import (
 	"go.temporal.io/sdk/worker"
 )
 
-// Initialize a Temporal worker to handle bill creation,
-// connected to PostgreSQL independently for horizontal scalability.
+// Initialize a Temporal worker to handle bill creation and
+// connect to PostgreSQL independently for horizontal scalability.
 // Register and listen for tasks associated with "create-bill-queue".
 func main() {
 	// Connect to Temporal
