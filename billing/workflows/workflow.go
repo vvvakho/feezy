@@ -10,6 +10,9 @@ import (
 	"go.temporal.io/sdk/workflow"
 )
 
+// BillWorkflow is a Temporal workflow that represents a stateful, long-running
+// bill instance, beginning at bill creation and armed with signal and update receptors for
+// processing bill events, such as adding or removing items, or querying and closing bill.
 func BillWorkflow(ctx workflow.Context, bill *domain.Bill) (*domain.Bill, error) {
 	// Initialize workflow with context, selector, and logger
 	ctx, selector, logger, err := initWorkflow(ctx, bill)
@@ -18,33 +21,37 @@ func BillWorkflow(ctx workflow.Context, bill *domain.Bill) (*domain.Bill, error)
 	}
 
 	// Asynchronously add bill to `open_bills` DB
+	// 1. Useful for fast querying of whether bill is open
+	// 2. Minimizes cost implications of Temporal actions
 	requestID := uuid.NewString()
 	err = workflow.ExecuteActivity(ctx, AddOpenBillToDB, bill, requestID).Get(ctx, nil)
 	if err != nil {
-		return bill, err
+		return nil, fmt.Errorf("Error saving bill to open_bills database: %v", err)
 	}
 
-	// Start listening for events
+	// Start listening for bill events
 	for {
-		// Finish workflows when bill is closed
+		// If bill status is closed, immediately finish work
 		if bill.Status == domain.BillClosed {
 			logger.Info("Bill closed, finishing workflows.", "BillID", bill.ID)
 			break
 		}
 
+		// Process bill event signals and updates
 		selector.Select(ctx)
 	}
 
 	return bill, nil
 }
 
+// Initialize the workflow with context, activity options, mutex, selector, logger.
 func initWorkflow(ctx workflow.Context, bill *domain.Bill) (workflow.Context, workflow.Selector, log.Logger, error) {
 	logger := workflow.GetLogger(ctx)
 
 	bill.CreatedAt = time.Now()
 	bill.UpdatedAt = time.Now()
 
-	// Create a mutex for safe concurrency
+	// Create a mutex for safe concurrency during requests
 	mu := workflow.NewMutex(ctx)
 
 	// Register handler for GetBill
@@ -54,7 +61,7 @@ func initWorkflow(ctx workflow.Context, bill *domain.Bill) (workflow.Context, wo
 		return nil, nil, nil, fmt.Errorf("SetQueryHandler failed: %v", err)
 	}
 
-	// Add custom default activitiy options to context
+	// Add custom activitiy options to context
 	ctx = workflow.WithActivityOptions(ctx, ao)
 
 	// Register the Update handler for closing the bill
@@ -63,14 +70,14 @@ func initWorkflow(ctx workflow.Context, bill *domain.Bill) (workflow.Context, wo
 		return nil, nil, nil, fmt.Errorf("Error registering handler for CloseBillUpdate: %v", err)
 	}
 
-	// Set up channels for signals
+	// Set up channels for receiving signals
 	addLineItemChan := workflow.GetSignalChannel(ctx, AddLineItemRoute.Name)
 	removeLineItemChan := workflow.GetSignalChannel(ctx, RemoveLineItemRoute.Name)
 	closeBillChan := workflow.GetSignalChannel(ctx, CloseBillRoute.Name)
 	closeWorkflowChan := workflow.GetSignalChannel(ctx, CloseWorkflowRoute.Name)
 	selector := workflow.NewSelector(ctx)
 
-	// Register handlers for signals
+	// Register handlers for processing signals
 	registerSignalHandlers(
 		ctx,
 		mu,

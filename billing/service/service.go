@@ -33,6 +33,7 @@ type Repository interface {
 	GetClosedBillItemsFromDB(context.Context, string) ([]domain.Item, error)
 }
 
+// Initialize billing service with an Execution and Repository entities
 func initService() (*Service, error) {
 	// Init Execution client
 	tc, err := execution.New()

@@ -49,6 +49,7 @@ var CloseWorkflowRoute = SignalRoute{
 	Name: "CloseWorkflowSignal",
 }
 
+// Register Temporal signal handlers for processing bill events.
 func registerSignalHandlers(
 	ctx workflow.Context,
 	mu workflow.Mutex,
@@ -61,28 +62,28 @@ func registerSignalHandlers(
 	logger log.Logger,
 ) {
 
-	// Register a handler to add line item
+	// Register a handler for adding line item to bill
 	selector.AddReceive(addLineItemChan, func(c workflow.ReceiveChannel, _ bool) {
 		if err := HandleAddLineItemSignal(ctx, mu, c, bill); err != nil {
 			logger.Error("Adding item to bill", "Error", err)
 		}
 	})
 
-	// Register a handler to remove line item
+	// Register a handler for removing line item from bill
 	selector.AddReceive(removeLineItemChan, func(c workflow.ReceiveChannel, _ bool) {
 		if err := HandleRemoveLineItemSignal(ctx, mu, c, bill); err != nil {
 			logger.Error("Removing item from bill", "Error", err)
 		}
 	})
 
-	// Register a handler to close bill
+	// Register a handler for closing bill (through a signal)
 	selector.AddReceive(closeBillChan, func(c workflow.ReceiveChannel, _ bool) {
 		if err := HandleCloseBillSignal(ctx, mu, c, bill, logger); err != nil {
 			logger.Error("Closing bill", "Error", err)
 		}
 	})
 
-	// Register a handler to close workflow
+	// Register a handler for closing workflow
 	selector.AddReceive(closeWorkflowChan, func(c workflow.ReceiveChannel, _ bool) {
 		if err := HandleCloseWorkflowSignal(ctx, mu, c, bill, logger); err != nil {
 			logger.Error("Closing workflow", "Error", err)
@@ -90,6 +91,7 @@ func registerSignalHandlers(
 	})
 }
 
+// Handler function for adding line item to bill.
 func HandleAddLineItemSignal(ctx workflow.Context, mu workflow.Mutex, c workflow.ReceiveChannel, bill *domain.Bill) error {
 	// Use mutex locking for safe concurrency
 	err := mu.Lock(ctx)
@@ -119,6 +121,7 @@ func HandleAddLineItemSignal(ctx workflow.Context, mu workflow.Mutex, c workflow
 	return nil
 }
 
+// Handler function for removing line item from bill.
 func HandleRemoveLineItemSignal(ctx workflow.Context, mu workflow.Mutex, c workflow.ReceiveChannel, bill *domain.Bill) error {
 	// Use mutex locking for safe concurrency
 	err := mu.Lock(ctx)
@@ -144,6 +147,7 @@ func HandleRemoveLineItemSignal(ctx workflow.Context, mu workflow.Mutex, c workf
 	return nil
 }
 
+// Handler function for closing bill through a signal call.
 func HandleCloseBillSignal(ctx workflow.Context, mu workflow.Mutex, c workflow.ReceiveChannel, bill *domain.Bill, logger log.Logger) error {
 	for {
 		// If the bill is already closed, ignore further signals
@@ -159,12 +163,15 @@ func HandleCloseBillSignal(ctx workflow.Context, mu workflow.Mutex, c workflow.R
 		}
 		defer mu.Unlock()
 
+		// Inititate bill closing status
 		bill.Status = domain.BillClosing
 		bill.UpdatedAt = time.Now()
 
+		// Unpack the signal contents
 		var closeSignal CloseBillSignal
 		c.Receive(ctx, &closeSignal)
 
+		// Calculate bill total or throw an error in case of failure
 		if err := bill.CalculateTotal(); err != nil {
 			logger.Error("Error calculating bill total", "Error", err)
 			bill.Status = domain.BillOpen
@@ -178,7 +185,6 @@ func HandleCloseBillSignal(ctx workflow.Context, mu workflow.Mutex, c workflow.R
 			MaximumInterval:    time.Minute,
 			MaximumAttempts:    5,
 		}
-
 		activityOptions := workflow.ActivityOptions{
 			StartToCloseTimeout: time.Minute,
 			RetryPolicy:         retryPolicy,
@@ -225,6 +231,7 @@ func HandleCloseBillSignal(ctx workflow.Context, mu workflow.Mutex, c workflow.R
 	return nil
 }
 
+// Handler function for closing bill through an update call.
 func HandleCloseBillUpdate(ctx workflow.Context, mu workflow.Mutex, bill *domain.Bill, logger log.Logger) error {
 	// Set up a handler function to process CloseBillUpdate events
 	err := workflow.SetUpdateHandler(ctx, "CloseBillUpdate", func(ctx workflow.Context, requestID string) (*domain.Bill, error) {
@@ -245,9 +252,11 @@ func HandleCloseBillUpdate(ctx workflow.Context, mu workflow.Mutex, bill *domain
 		}
 		defer mu.Unlock()
 
+		// Inititate bill closing status
 		bill.Status = domain.BillClosing
 		bill.UpdatedAt = time.Now()
 
+		// Calculate bill total or throw an error in case of failure
 		if err := bill.CalculateTotal(); err != nil {
 			logger.Error("Error calculating bill total", "Error", err)
 			bill.Status = domain.BillOpen
@@ -261,7 +270,6 @@ func HandleCloseBillUpdate(ctx workflow.Context, mu workflow.Mutex, bill *domain
 			MaximumInterval:    time.Minute,
 			MaximumAttempts:    5,
 		}
-
 		activityOptions := workflow.ActivityOptions{
 			StartToCloseTimeout: time.Minute,
 			RetryPolicy:         retryPolicy,
@@ -298,23 +306,29 @@ func HandleCloseBillUpdate(ctx workflow.Context, mu workflow.Mutex, bill *domain
 			return nil, err
 		}
 
+		// Finish the action of closing bill
 		bill.Status = domain.BillClosed
 		logger.Info("Bill successfully saved as closed in DB", "BillID", bill.ID)
 		return bill, nil
 	})
+
 	return err
 }
 
+// Handler function for closing a workflow through signal call.
 func HandleCloseWorkflowSignal(ctx workflow.Context, mu workflow.Mutex, c workflow.ReceiveChannel, bill *domain.Bill, logger log.Logger) error {
+	// Unpack the signal contents
 	var closeWFSignal CloseWorkflowSignal
 	c.Receive(ctx, &closeWFSignal)
 
+	// Mutex locking for safe concurrency
 	err := mu.Lock(ctx)
 	if err != nil {
 		return fmt.Errorf("Error locking mutex: %v", err)
 	}
 	defer mu.Unlock()
 
+	// Change bill status to closed to finish workflow
 	logger.Info("Received CloseWorkflow signal, finishing workflows.", "BillID", bill.ID)
 	bill.Status = domain.BillClosed
 	return nil
