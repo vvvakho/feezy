@@ -23,7 +23,7 @@ type CreateBillResponse struct {
 
 func validateCreateBillRequest(req *CreateBillRequest) error {
 	_, err := uuid.Parse(req.UserID)
-	if err != nil {
+	if err != nil || req.UserID == "" {
 		return fmt.Errorf("Invalid UserID: %v", err)
 	}
 	_, err = domain.IsValidCurrency(req.Currency)

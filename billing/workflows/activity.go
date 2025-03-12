@@ -47,6 +47,8 @@ type Repo struct {
 	DB *sql.DB
 }
 
+// Add a bill to the open bills table, ensuring idempotent updates based on requestID.
+// Ensures atomicity through transactions and avoids duplicate processing via requestID tracking.
 func (r *Repo) AddOpenBillToDB(ctx context.Context, bill *domain.Bill, requestID *string) error {
 	tx, err := r.DB.Begin()
 	if err != nil {
@@ -88,6 +90,8 @@ func (r *Repo) AddOpenBillToDB(ctx context.Context, bill *domain.Bill, requestID
 	return nil
 }
 
+// Move a bill from open to closed database table, ensuring idempotency via requestID.
+// Ensures atomicity through transactions and handles duplicate requests gracefully.
 func (r *Repo) AddClosedBillToDB(ctx context.Context, bill *domain.Bill, requestID *string) error {
 	// Validate requestID before initiating transaction
 	if requestID == nil {
@@ -150,7 +154,7 @@ func (r *Repo) AddClosedBillToDB(ctx context.Context, bill *domain.Bill, request
 			// Bill closed with a different requestID: non-retryable error
 			return temporal.NewNonRetryableApplicationError(
 				"bill already closed with a different request",
-				"BillAlreadyClosedError",
+				"DuplicateRequestError",
 				nil,
 			)
 		}
@@ -194,11 +198,13 @@ func (r *Repo) AddClosedBillToDB(ctx context.Context, bill *domain.Bill, request
 	return nil
 }
 
+// Check whether an error is due to user input.
 func isUserInputError(err error) bool {
 	if err == nil {
 		return false
 	}
 	errMsg := err.Error()
+	// Check whether the error from the database transaction contains certain flags
 	return strings.Contains(errMsg, "duplicate key value")
 	// We can define other User related errors below
 }

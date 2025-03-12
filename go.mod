@@ -4,12 +4,12 @@ go 1.23.4
 
 require (
 	encore.dev v1.46.1
-	github.com/golang-jwt/jwt/v4 v4.5.1
 	github.com/google/uuid v1.6.0
 	github.com/lib/pq v1.10.9
 	github.com/stretchr/testify v1.10.0
 	go.temporal.io/api v1.44.1
 	go.temporal.io/sdk v1.33.0
+	go.uber.org/mock v0.5.0
 )
 
 require (

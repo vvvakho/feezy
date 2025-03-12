@@ -11,9 +11,9 @@ import (
 	"go.temporal.io/sdk/worker"
 )
 
-// Dependency injection -- primarily for mock testing
-var TemporalDial = client.Dial
-
+// Initialize a Temporal worker to handle bill creation,
+// connected to PostgreSQL independently for horizontal scalability.
+// Register and listen for tasks associated with "create-bill-queue".
 func main() {
 	// Connect to Temporal
 	c, err := client.Dial(client.Options{})
@@ -50,3 +50,6 @@ func main() {
 		log.Fatalf("Unable to start Worker: %v", err)
 	}
 }
+
+// Dependency injection -- primarily for mock testing
+var TemporalDial = client.Dial
