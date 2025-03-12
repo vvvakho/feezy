@@ -23,12 +23,13 @@ Feezy is a **billing and fees management API** that provides an efficient way to
 feezy/
 ├── billing/
 │   ├── conf/
+│   ├── mocks/               # Mock interfaces for testing
 │   ├── service/
 │   │   ├── domain/
 │   │   │   └── domain.go    # Core domain models (Bill, Item, Money)
-│   │   ├── migrations/
-│   │   ├── temporal/
-│   │   │   └── client.go    # Temporal client for workflow interactions
+│   │   ├── execution/
+│   │   │   └── temporal.go  # Temporal client for workflow execution
+│   │   ├── migrations/      # Database migrations
 │   │   ├── api.go           # API endpoints for bill management
 │   │   ├── db.go            # Database repository for bill storage
 │   │   ├── dto.go           # Payload parameters for api requests
